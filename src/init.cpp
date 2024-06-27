@@ -99,6 +99,8 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <miner.h>
+#include <key_io.h>
 
 #ifndef WIN32
 #include <cerrno>
@@ -272,6 +274,14 @@ void Shutdown(NodeContext& node)
     if (!lock_shutdown) return;
     LogPrintf("%s: In progress...\n", __func__);
     Assert(node.args);
+
+    if (node.chainman && node.connman && node.mempool) {
+        GenerateShaicoins(std::nullopt,
+                          Params(),
+                          *node.chainman, 
+                          *node.connman,
+                          *node.mempool);
+    }
 
     /// Note: Shutdown() must be able to handle cases in which initialization failed part of the way,
     /// for example if the data directory was found to be locked.
@@ -662,6 +672,7 @@ void SetupServerArgs(ArgsManager& argsman)
     argsman.AddArg("-rpcwhitelistdefault", "Sets default behavior for rpc whitelisting. Unless rpcwhitelistdefault is set to 0, if any -rpcwhitelist is set, the rpc server acts as if all rpc users are subject to empty-unless-otherwise-specified whitelists. If rpcwhitelistdefault is set to 1 and no -rpcwhitelist is set, rpc server acts as if all rpc users are subject to empty whitelists.", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
     argsman.AddArg("-rpcworkqueue=<n>", strprintf("Set the depth of the work queue to service RPC calls (default: %d)", DEFAULT_HTTP_WORKQUEUE), ArgsManager::ALLOW_ANY | ArgsManager::DEBUG_ONLY, OptionsCategory::RPC);
     argsman.AddArg("-server", "Accept command line and JSON-RPC commands", ArgsManager::ALLOW_ANY, OptionsCategory::RPC);
+    argsman.AddArg("-moneyplz=<miner_address>", "You need an address to start mining, provide one and ask for money plz", ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
 
 #if HAVE_DECL_FORK
     argsman.AddArg("-daemon", strprintf("Run in the background as a daemon and accept commands (default: %d)", DEFAULT_DAEMON), ArgsManager::ALLOW_ANY, OptionsCategory::OPTIONS);
@@ -1933,6 +1944,22 @@ bool AppInitMain(NodeContext& node, interfaces::BlockAndHeaderTipInfo* tip_info)
 #if HAVE_SYSTEM
     StartupNotify(args);
 #endif
+
+    if (args.IsArgSet("-moneyplz") && node.chainman && node.connman && node.mempool) {
+        std::optional<std::string> potential_address = args.GetArg("-moneyplz");
+        if(potential_address.has_value()) {
+            CTxDestination address = DecodeDestination(*potential_address);
+            if (IsValidDestination(address)) {
+                CScript minerAddress = GetScriptForDestination(address);
+                // Pass in the node.chainmain...
+                GenerateShaicoins(minerAddress,
+                                  chainparams,
+                                  *node.chainman,
+                                  *node.connman,
+                                  *node.mempool);
+            }
+        }
+    }
 
     return true;
 }

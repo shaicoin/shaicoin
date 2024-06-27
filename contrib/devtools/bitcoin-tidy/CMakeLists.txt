@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.9)
 
-project(bitcoin-tidy VERSION 1.0.0 DESCRIPTION "clang-tidy checks for Bitcoin Core")
+project(bitcoin-tidy VERSION 1.0.0 DESCRIPTION "clang-tidy checks for Shaicoin Core")
 
 include(GNUInstallDirs)
 

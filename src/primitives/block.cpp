@@ -10,7 +10,21 @@
 
 uint256 CBlockHeader::GetHash() const
 {
-    return (HashWriter{} << *this).GetHash();
+    return (HashWriter{} << vdfSolution).GetSHA256();
+}
+
+uint256 CBlockHeader::GetSHA256() const
+{   
+    CBlockHeader no_vdf_randomx {};
+    no_vdf_randomx.nVersion = nVersion;
+    no_vdf_randomx.hashPrevBlock = hashPrevBlock;
+    no_vdf_randomx.hashMerkleRoot = hashMerkleRoot;
+    no_vdf_randomx.nTime = nTime;
+    no_vdf_randomx.nBits = nBits;
+    no_vdf_randomx.nNonce = nNonce;
+    no_vdf_randomx.hashRandomX.SetNull();
+    no_vdf_randomx.vdfSolution.fill(USHRT_MAX); 
+    return (HashWriter{} << no_vdf_randomx).GetSHA256();
 }
 
 std::string CBlock::ToString() const

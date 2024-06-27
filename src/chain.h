@@ -204,6 +204,8 @@ public:
     uint32_t nTime{0};
     uint32_t nBits{0};
     uint32_t nNonce{0};
+    uint256 hashRandomX{};
+    std::array<uint16_t, 1992> vdfSolution;
 
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     int32_t nSequenceId{0};
@@ -216,7 +218,9 @@ public:
           hashMerkleRoot{block.hashMerkleRoot},
           nTime{block.nTime},
           nBits{block.nBits},
-          nNonce{block.nNonce}
+          nNonce{block.nNonce},
+          hashRandomX{block.hashRandomX},
+          vdfSolution{block.vdfSolution}
     {
     }
 
@@ -252,6 +256,8 @@ public:
         block.nTime = nTime;
         block.nBits = nBits;
         block.nNonce = nNonce;
+        block.hashRandomX = hashRandomX;
+        block.vdfSolution = vdfSolution;
         return block;
     }
 
@@ -424,6 +430,8 @@ public:
         READWRITE(obj.nTime);
         READWRITE(obj.nBits);
         READWRITE(obj.nNonce);
+        READWRITE(obj.hashRandomX);
+        READWRITE(obj.vdfSolution);
     }
 
     uint256 ConstructBlockHash() const
@@ -435,6 +443,8 @@ public:
         block.nTime = nTime;
         block.nBits = nBits;
         block.nNonce = nNonce;
+        block.hashRandomX = hashRandomX;
+        block.vdfSolution = vdfSolution;
         return block.GetHash();
     }
 

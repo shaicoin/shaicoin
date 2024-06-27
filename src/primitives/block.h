@@ -28,13 +28,15 @@ public:
     uint32_t nTime;
     uint32_t nBits;
     uint32_t nNonce;
+    uint256 hashRandomX; // 32bytes +
+    std::array<uint16_t, 1992> vdfSolution; // 3984bytes + previous 80 bytes = 4096 byte block headers.
 
     CBlockHeader()
     {
         SetNull();
     }
 
-    SERIALIZE_METHODS(CBlockHeader, obj) { READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce); }
+    SERIALIZE_METHODS(CBlockHeader, obj) { READWRITE(obj.nVersion, obj.hashPrevBlock, obj.hashMerkleRoot, obj.nTime, obj.nBits, obj.nNonce, obj.hashRandomX, obj.vdfSolution); }
 
     void SetNull()
     {
@@ -44,6 +46,8 @@ public:
         nTime = 0;
         nBits = 0;
         nNonce = 0;
+        hashRandomX.SetNull();
+        vdfSolution.fill(USHRT_MAX);
     }
 
     bool IsNull() const
@@ -51,7 +55,8 @@ public:
         return (nBits == 0);
     }
 
-    uint256 GetHash() const;
+    [[nodiscard]] uint256 GetHash() const;
+    [[nodiscard]] uint256 GetSHA256() const;
 
     NodeSeconds Time() const
     {
@@ -110,6 +115,8 @@ public:
         block.nTime          = nTime;
         block.nBits          = nBits;
         block.nNonce         = nNonce;
+        block.hashRandomX    = hashRandomX;
+        block.vdfSolution    = vdfSolution;
         return block;
     }
 

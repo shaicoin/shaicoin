@@ -9,120 +9,164 @@
 #include <chain.h>
 #include <primitives/block.h>
 #include <uint256.h>
+#include <miner.h>
+#include <hash.h>
 
-unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params& params)
-{
-    assert(pindexLast != nullptr);
-    unsigned int nProofOfWorkLimit = UintToArith256(params.powLimit).GetCompact();
+typedef long long int64;
 
-    // Only change once per difficulty adjustment interval
-    if ((pindexLast->nHeight+1) % params.DifficultyAdjustmentInterval() != 0)
-    {
-        if (params.fPowAllowMinDifficultyBlocks)
-        {
-            // Special difficulty rule for testnet:
-            // If the new block's timestamp is more than 2* 10 minutes
-            // then allow mining of a min-difficulty block.
-            if (pblock->GetBlockTime() > pindexLast->GetBlockTime() + params.nPowTargetSpacing*2)
-                return nProofOfWorkLimit;
-            else
-            {
-                // Return the last non-special-min-difficulty-rules-block
-                const CBlockIndex* pindex = pindexLast;
-                while (pindex->pprev && pindex->nHeight % params.DifficultyAdjustmentInterval() != 0 && pindex->nBits == nProofOfWorkLimit)
-                    pindex = pindex->pprev;
-                return pindex->nBits;
-            }
-        }
-        return pindexLast->nBits;
-    }
+static const int64 nTargetSpacing = 5 * 60;  // 5 minute block time target
+static arith_uint256 bnProofOfWorkLimit(~arith_uint256(0) >> 16);
+static const uint8_t sample_window = 4;
+static_assert(nTargetSpacing != 0);
 
-    // Go back by what we want to be 14 days worth of blocks
-    int nHeightFirst = pindexLast->nHeight - (params.DifficultyAdjustmentInterval()-1);
-    assert(nHeightFirst >= 0);
-    const CBlockIndex* pindexFirst = pindexLast->GetAncestor(nHeightFirst);
-    assert(pindexFirst);
-
-    return CalculateNextWorkRequired(pindexLast, pindexFirst->GetBlockTime(), params);
+int static mapNumber(double x, int in_min, int in_max, int out_min, int out_max) {
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-unsigned int CalculateNextWorkRequired(const CBlockIndex* pindexLast, int64_t nFirstBlockTime, const Consensus::Params& params)
+//
+//  The catcoin inspiration code had a non typical PID controller calculator
+//  so we had to rewrite it from scratch below are the details
+//
+//  1. Error calculation:
+//      error = setpoint - measured_value;
+//
+//  2. Proportional term (P):
+//      P_out = Kp * error;
+//
+//  3. Integral term (I):
+//      integral += error;
+//      I_out = Ki * integral;
+//
+//  4. Derivative term (D):
+//      derivative = (error - previous_error) / dt;
+//      D_out = Kd * derivative;
+//
+//  5. Combine the terms:
+//      output = P_out + I_out;
+//
+//  6. Average the output and make asymmetric adjustment (DigiShield Inspired)
+//
+//  Where:
+//  - measured_value: The current value being measured.
+//  - setpoint: The desired target value.
+//  - Kp: Proportional gain.
+//  - Ki: Integral gain.
+//  - Kd: Derivative gain.
+//  - dt: Time difference between the current and previous measurement.
+//  - error: Difference between the measured value and the setpoint.
+//  - integral: Accumulated sum of previous errors (for the integral term).
+//  - previous_error: The error from the previous time step (for the derivative term).
+//  - output: The final control output.
+unsigned int static GetNextWorkRequired_PID(const CBlockIndex* pindexLast,
+                                            const CBlockHeader *pblock,
+                                            const Consensus::Params& params)
 {
-    if (params.fPowNoRetargeting)
-        return pindexLast->nBits;
-
-    // Limit adjustment step
-    int64_t nActualTimespan = pindexLast->GetBlockTime() - nFirstBlockTime;
-    if (nActualTimespan < params.nPowTargetTimespan/4)
-        nActualTimespan = params.nPowTargetTimespan/4;
-    if (nActualTimespan > params.nPowTargetTimespan*4)
-        nActualTimespan = params.nPowTargetTimespan*4;
-
-    // Retarget
-    const arith_uint256 bnPowLimit = UintToArith256(params.powLimit);
     arith_uint256 bnNew;
     bnNew.SetCompact(pindexLast->nBits);
-    bnNew *= nActualTimespan;
-    bnNew /= params.nPowTargetTimespan;
 
-    if (bnNew > bnPowLimit)
-        bnNew = bnPowLimit;
+    double kpGain = 0.716;
+    double kiGain = 0.333;
+    double kdGain = 0.042;
+
+    int64_t integral_term = 0;
+    double u_there = 0;
+    int64_t buffer[sample_window];
+
+    const CBlockIndex* pindexFirst = pindexLast;
+    int i = sample_window - 1;
+    while(i >= 0) {
+        buffer[i] = pindexFirst->GetBlockTime();
+        pindexFirst = pindexFirst->pprev;
+        if(i > 0) {
+            i = i - 1;
+        } else {
+            break;
+        }
+    }
+
+    for(size_t index = 1; index < sample_window; index++) {
+        int64_t time_between_blocks = buffer[index] - buffer[index - 1];
+        int64_t time_between_old_blocks = (index == 1) ? 0 : buffer[index - 1] - buffer[index - 2];
+
+        int64_t current_system_error = nTargetSpacing - time_between_blocks;
+        int64_t previous_system_error = (index == 1) ? 0 : nTargetSpacing - time_between_old_blocks;
+        
+        integral_term += current_system_error;
+
+        double p = kpGain * current_system_error;
+        double i = kiGain * integral_term;
+        double d = (time_between_blocks == 0) ? 0 : kdGain * ((current_system_error - previous_system_error) / time_between_blocks);
+
+        u_there += p + i + d;
+    }
+
+    double rounded_value = std::round(u_there / (sample_window - 1));
+
+    if(rounded_value < -42) { // longer than normal
+        double max_adjustment = -nTargetSpacing;
+        if(rounded_value < max_adjustment) {
+            rounded_value = max_adjustment;
+        }
+        bnNew *= mapNumber(-rounded_value, 42, -max_adjustment, 105, 132);
+        bnNew /= 100;
+    } else if(rounded_value > 42) { // shorter than normal
+        double max_adjustment = nTargetSpacing * 1.24;
+        if(rounded_value > max_adjustment) {
+            rounded_value = max_adjustment;
+        }
+        bnNew *= 100;
+        bnNew /= mapNumber(rounded_value, 42, max_adjustment, 102, 116);
+    }
+
+    if (bnNew > bnProofOfWorkLimit || (bnNew.getdouble() == 0)) {
+        bnNew = bnProofOfWorkLimit;
+    }
 
     return bnNew.GetCompact();
+}
+
+unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast,
+                                 const CBlockHeader *pblock,
+                                 const Consensus::Params& params) {
+    assert(pindexLast != nullptr);
+
+    if (pindexLast->nHeight <= (sample_window + 1)) {
+        return bnProofOfWorkLimit.GetCompact();
+    }
+    
+	return GetNextWorkRequired_PID(pindexLast, pblock, params);
 }
 
 // Check that on difficulty adjustments, the new difficulty does not increase
 // or decrease beyond the permitted limits.
 bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t height, uint32_t old_nbits, uint32_t new_nbits)
 {
-    if (params.fPowAllowMinDifficultyBlocks) return true;
+    arith_uint256 old_target, new_target;
+    old_target.SetCompact(old_nbits);
+    new_target.SetCompact(new_nbits);
 
-    if (height % params.DifficultyAdjustmentInterval() == 0) {
-        int64_t smallest_timespan = params.nPowTargetTimespan/4;
-        int64_t largest_timespan = params.nPowTargetTimespan*4;
+    // Calculate the permitted range
+    arith_uint256 max_increase = old_target;
+    arith_uint256 max_decrease = old_target;
 
-        const arith_uint256 pow_limit = UintToArith256(params.powLimit);
-        arith_uint256 observed_new_target;
-        observed_new_target.SetCompact(new_nbits);
+    max_increase *= 133;
+    max_increase /= 100;
 
-        // Calculate the largest difficulty value possible:
-        arith_uint256 largest_difficulty_target;
-        largest_difficulty_target.SetCompact(old_nbits);
-        largest_difficulty_target *= largest_timespan;
-        largest_difficulty_target /= params.nPowTargetTimespan;
+    max_decrease *= 100;
+    max_decrease /= 117;
 
-        if (largest_difficulty_target > pow_limit) {
-            largest_difficulty_target = pow_limit;
-        }
-
-        // Round and then compare this new calculated value to what is
-        // observed.
-        arith_uint256 maximum_new_target;
-        maximum_new_target.SetCompact(largest_difficulty_target.GetCompact());
-        if (maximum_new_target < observed_new_target) return false;
-
-        // Calculate the smallest difficulty value possible:
-        arith_uint256 smallest_difficulty_target;
-        smallest_difficulty_target.SetCompact(old_nbits);
-        smallest_difficulty_target *= smallest_timespan;
-        smallest_difficulty_target /= params.nPowTargetTimespan;
-
-        if (smallest_difficulty_target > pow_limit) {
-            smallest_difficulty_target = pow_limit;
-        }
-
-        // Round and then compare this new calculated value to what is
-        // observed.
-        arith_uint256 minimum_new_target;
-        minimum_new_target.SetCompact(smallest_difficulty_target.GetCompact());
-        if (minimum_new_target > observed_new_target) return false;
-    } else if (old_nbits != new_nbits) {
+    if (new_target > max_increase || new_target < max_decrease) {
         return false;
     }
     return true;
 }
 
-bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params& params)
+bool CheckProofOfWork(uint256 hash,
+                      uint256 shaTwoFiftySixHash,
+                      unsigned int nBits,
+                      uint256 hashRandomX,
+                      const std::array<uint16_t, 1992>& vdfSolution,
+                      const Consensus::Params& params)
 {
     bool fNegative;
     bool fOverflow;
@@ -131,12 +175,45 @@ bool CheckProofOfWork(uint256 hash, unsigned int nBits, const Consensus::Params&
     bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
 
     // Check range
-    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit))
+    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit)) {
         return false;
+    }
 
     // Check proof of work matches claimed amount
-    if (UintToArith256(hash) > bnTarget)
+    if (UintToArith256(hash) > bnTarget) {
         return false;
+    }
 
-    return true;
+    // construct RandomX
+    uint256 second_hash = (HashWriter{} << shaTwoFiftySixHash).GetSHA256();
+    uint256 randomx_hash = calculate_randomx_hash(shaTwoFiftySixHash.ToString(),
+                                                  second_hash.ToString());
+    if(randomx_hash != hashRandomX) {
+        return false;
+    }
+
+    // construct VDF Graph
+    uint256 graph_construction_hash = second_hash ^ randomx_hash;
+    HCGraphUtil util{};
+    size_t grid_size = util.getGridSize(graph_construction_hash.ToString());
+    std::vector<std::vector<bool>> graph = util.generateGraph(graph_construction_hash, grid_size);
+
+    std::array<uint16_t, 1992> vdf_solution {};
+    std::copy(vdfSolution.begin(), vdfSolution.end(), vdf_solution.begin());
+
+    bool found_zero = false;
+    for(size_t i = 0; i < 1992; i++) {
+        if(vdf_solution[0] == 0) {
+            found_zero = true;
+            break;
+        }
+        util.reverse_shift(vdf_solution);
+    }
+    
+    if(found_zero == false) {
+        return false;
+    }
+
+    // verify the vdf solution
+    return util.verifyHamiltonianCycle(graph, vdf_solution);
 }

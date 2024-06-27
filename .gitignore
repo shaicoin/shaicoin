@@ -1,5 +1,10 @@
 *.tar.gz
 
+.vscode/
+**/.vscode
+.DS_Store
+**/.DS_Store
+
 *.exe
 *.pdb
 src/bitcoin

@@ -129,27 +129,27 @@ static RPCHelpMan getnetworkhashps()
 
 static bool GenerateBlock(ChainstateManager& chainman, CBlock& block, uint64_t& max_tries, std::shared_ptr<const CBlock>& block_out, bool process_new_block)
 {
-    block_out.reset();
-    block.hashMerkleRoot = BlockMerkleRoot(block);
+    // block_out.reset();
+    // block.hashMerkleRoot = BlockMerkleRoot(block);
 
-    while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(block.GetHash(), block.nBits, chainman.GetConsensus()) && !chainman.m_interrupt) {
-        ++block.nNonce;
-        --max_tries;
-    }
-    if (max_tries == 0 || chainman.m_interrupt) {
-        return false;
-    }
-    if (block.nNonce == std::numeric_limits<uint32_t>::max()) {
-        return true;
-    }
+    // while (max_tries > 0 && block.nNonce < std::numeric_limits<uint32_t>::max() && !CheckProofOfWork(block, chainman.GetConsensus()) && !chainman.m_interrupt) {
+    //     ++block.nNonce;
+    //     --max_tries;
+    // }
+    // if (max_tries == 0 || chainman.m_interrupt) {
+    //     return false;
+    // }
+    // if (block.nNonce == std::numeric_limits<uint32_t>::max()) {
+    //     return true;
+    // }
 
-    block_out = std::make_shared<const CBlock>(block);
+    // block_out = std::make_shared<const CBlock>(block);
 
-    if (!process_new_block) return true;
+    // if (!process_new_block) return true;
 
-    if (!chainman.ProcessNewBlock(block_out, /*force_processing=*/true, /*min_pow_checked=*/true, nullptr)) {
-        throw JSONRPCError(RPC_INTERNAL_ERROR, "ProcessNewBlock, block not accepted");
-    }
+    // if (!chainman.ProcessNewBlock(block_out, /*force_processing=*/true, /*min_pow_checked=*/true, nullptr)) {
+    //     throw JSONRPCError(RPC_INTERNAL_ERROR, "ProcessNewBlock, block not accepted");
+    // }
 
     return true;
 }

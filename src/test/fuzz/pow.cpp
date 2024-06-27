@@ -63,7 +63,6 @@ FUZZ_TARGET(pow, .init = initialize_pow)
         }
         {
             (void)GetBlockProof(current_block);
-            (void)CalculateNextWorkRequired(&current_block, fuzzed_data_provider.ConsumeIntegralInRange<int64_t>(0, std::numeric_limits<int64_t>::max()), consensus_params);
             if (current_block.nHeight != std::numeric_limits<int>::max() && current_block.nHeight - (consensus_params.DifficultyAdjustmentInterval() - 1) >= 0) {
                 (void)GetNextWorkRequired(&current_block, &(*block_header), consensus_params);
             }
@@ -75,12 +74,6 @@ FUZZ_TARGET(pow, .init = initialize_pow)
             try {
                 (void)GetBlockProofEquivalentTime(*to, *from, *tip, consensus_params);
             } catch (const uint_error&) {
-            }
-        }
-        {
-            const std::optional<uint256> hash = ConsumeDeserializable<uint256>(fuzzed_data_provider);
-            if (hash) {
-                (void)CheckProofOfWork(*hash, fuzzed_data_provider.ConsumeIntegral<unsigned int>(), consensus_params);
             }
         }
     }

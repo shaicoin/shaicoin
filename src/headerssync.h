@@ -25,6 +25,8 @@ struct CompressedHeader {
     uint32_t nTime{0};
     uint32_t nBits{0};
     uint32_t nNonce{0};
+    uint256 hashRandomX{};
+    std::array<uint16_t, 1992> vdfSolution;
 
     CompressedHeader()
     {
@@ -38,6 +40,8 @@ struct CompressedHeader {
         nTime = header.nTime;
         nBits = header.nBits;
         nNonce = header.nNonce;
+        hashRandomX = header.hashRandomX;
+        vdfSolution = header.vdfSolution;
     }
 
     CBlockHeader GetFullHeader(const uint256& hash_prev_block) {
@@ -48,6 +52,8 @@ struct CompressedHeader {
         ret.nTime = nTime;
         ret.nBits = nBits;
         ret.nNonce = nNonce;
+        ret.hashRandomX = hashRandomX;
+        ret.vdfSolution = vdfSolution;
         return ret;
     };
 };

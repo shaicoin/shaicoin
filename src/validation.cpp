@@ -1690,15 +1690,11 @@ PackageMempoolAcceptResult ProcessNewPackage(Chainstate& active_chainstate, CTxM
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
 {
-    int halvings = nHeight / consensusParams.nSubsidyHalvingInterval;
-    // Force block reward to zero when right shift is undefined.
-    if (halvings >= 64)
-        return 0;
-
-    CAmount nSubsidy = 50 * COIN;
-    // Subsidy is cut in half every 210,000 blocks which will occur approximately every 4 years.
-    nSubsidy >>= halvings;
-    return nSubsidy;
+    if(nHeight >= consensusParams.tailEmissionBlockHeight) {
+        return CAmount { 10000000 }; // 0.1 KISMET
+    }
+    double reward = 50.0 * std::exp(-0.00001 * static_cast<double>(nHeight));
+    return static_cast<CAmount>(reward * static_cast<double>(COIN));
 }
 
 CoinsViews::CoinsViews(DBParams db_params, CoinsViewOptions options)
@@ -3656,7 +3652,12 @@ void ChainstateManager::ReceivedBlockTransactions(const CBlock& block, CBlockInd
 static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
     // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(block.GetHash(), block.nBits, consensusParams))
+    if (fCheckPOW && !CheckProofOfWork(block.GetHash(),
+                                       block.GetSHA256(),
+                                       block.nBits,
+                                       block.hashRandomX,
+                                       block.vdfSolution,
+                                       consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "proof of work failed");
 
     return true;
@@ -3850,7 +3851,12 @@ std::vector<unsigned char> ChainstateManager::GenerateCoinbaseCommitment(CBlock&
 bool HasValidProofOfWork(const std::vector<CBlockHeader>& headers, const Consensus::Params& consensusParams)
 {
     return std::all_of(headers.cbegin(), headers.cend(),
-            [&](const auto& header) { return CheckProofOfWork(header.GetHash(), header.nBits, consensusParams);});
+            [&](const auto& header) { return CheckProofOfWork(header.GetHash(),
+                                                              header.GetSHA256(),
+                                                              header.nBits,
+                                                              header.hashRandomX,
+                                                              header.vdfSolution,
+                                                              consensusParams);});
 }
 
 bool IsBlockMutated(const CBlock& block, bool check_witness_root)

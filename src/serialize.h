@@ -776,6 +776,26 @@ void Unserialize(Stream& is, T&& a)
     a.Unserialize(is);
 }
 
+/**
+ * 
+ * Added for block header VDF solution 
+ * 
+ **/
+template<typename Stream, size_t N>
+void Serialize(Stream& s, const std::array<uint16_t, N>& arr) {
+    for (size_t i = 0; i < N; ++i) {
+        Serialize(s, arr[i]);
+    }
+}
+
+template<typename Stream, size_t N>
+void Unserialize(Stream& s, std::array<uint16_t, N>& arr) {
+    for (size_t i = 0; i < N; ++i) {
+        Unserialize(s, arr[i]);
+    }
+}
+
+
 /** Default formatter. Serializes objects as themselves.
  *
  * The vector/prevector serialization code passes this to VectorFormatter

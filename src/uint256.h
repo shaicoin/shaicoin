@@ -110,6 +110,14 @@ public:
     constexpr explicit uint256(Span<const unsigned char> vch) : base_blob<256>(vch) {}
     static const uint256 ZERO;
     static const uint256 ONE;
+
+    constexpr uint256 operator^(const uint256& other) const {
+        uint256 result;
+        for (size_t i = 0; i < WIDTH; ++i) {
+            result.m_data[i] = this->m_data[i] ^ other.m_data[i];
+        }
+        return result;
+    }
 };
 
 /* uint256 from const char *.
