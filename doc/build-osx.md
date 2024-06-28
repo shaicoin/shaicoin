@@ -72,7 +72,7 @@ Now that all the required dependencies are installed, let's clone the Bitcoin Co
 All build scripts and commands will run from this directory.
 
 ``` bash
-git clone https://github.com/bitcoin/bitcoin.git
+git clone --recurse-submodules https://github.com/bitcoin/bitcoin.git
 ```
 
 ### 5. Install Optional Dependencies
@@ -184,7 +184,17 @@ It is required that you have `python` installed.
 
 ### 1. Configuration
 
-There are many ways to configure Bitcoin Core, here are a few common examples:
+There are many ways to configure Shaicoin Core, here are a few common examples:
+
+#### First you need to build randomx lib
+```bash
+cd src/randomx
+mkdir build && cd build
+cmake ..
+make -j{threads}
+mv librandomx.a ../
+cd ../../../
+```
 
 ##### Wallet (BDB + SQlite) Support, No GUI:
 

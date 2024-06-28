@@ -10,10 +10,10 @@
 
     <supports-screens android:largeScreens="true" android:normalScreens="true" android:anyDensity="true" android:smallScreens="true"/>
 
-    <application android:hardwareAccelerated="true" android:name="org.qtproject.qt5.android.bindings.QtApplication" android:label="Bitcoin Core">
+    <application android:hardwareAccelerated="true" android:name="org.qtproject.qt5.android.bindings.QtApplication" android:label="Shaicoin Core">
         <activity android:configChanges="orientation|uiMode|screenLayout|screenSize|smallestScreenSize|layoutDirection|locale|fontScale|keyboard|keyboardHidden|navigation|mcc|mnc|density"
                   android:name="org.bitcoincore.qt.BitcoinQtActivity"
-                  android:label="Bitcoin Core"
+                  android:label="Shaicoin Core"
                   android:icon="@drawable/bitcoin"
                   android:screenOrientation="unspecified"
                   android:launchMode="singleTop">

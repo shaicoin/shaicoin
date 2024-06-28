@@ -6,7 +6,15 @@ Some notes on how to build Bitcoin Core in Unix.
 
 To Build
 ---------------------
-
+make sure to clone the repo with --recurse-submodules
+```bash
+cd src/randomx
+mkdir build && cd build
+cmake ..
+make -j{threads}
+mv librandomx.a ../
+cd ../../../
+```
 ```bash
 ./autogen.sh
 ./configure
@@ -203,11 +211,11 @@ Setup and Build Example: Arch Linux
 This example lists the steps necessary to setup and build a command line only distribution of the latest changes on Arch Linux:
 
     pacman --sync --needed autoconf automake boost gcc git libevent libtool make pkgconf python sqlite
-    git clone https://github.com/bitcoin/bitcoin.git
-    cd bitcoin/
+    git clone --recurse-submodules https://github.com/shaicoin/shaicoin.git
+    cd shaicoin/
     ./autogen.sh
     ./configure
     make check
-    ./src/bitcoind
+    ./src/shaicoind
 
 If you intend to work with legacy Berkeley DB wallets, see [Berkeley DB](#berkeley-db) section.
