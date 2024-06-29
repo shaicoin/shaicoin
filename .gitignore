@@ -20,6 +20,16 @@ src/test/fuzz/fuzz
 src/test/test_bitcoin
 src/qt/test/test_bitcoin-qt
 
+src/shaicoind
+src/shaicoin-gui
+src/shaicoin-node
+src/shaicoin-cli
+src/shaicoin-cli
+src/shaicoin-tx
+src/shaicoin-util
+src/shaicoin-wallet
+src/shaicoin-chainstate
+
 # autoreconf
 Makefile.in
 aclocal.m4
