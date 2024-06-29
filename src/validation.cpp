@@ -3652,10 +3652,8 @@ void ChainstateManager::ReceivedBlockTransactions(const CBlock& block, CBlockInd
 static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
     // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(block.GetHash(),
-                                       block.GetSHA256(),
+    if (fCheckPOW && !CheckProofOfWork(block.GetSHA256(),
                                        block.nBits,
-                                       block.hashRandomX,
                                        block.vdfSolution,
                                        consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash", "proof of work failed");
@@ -3851,10 +3849,8 @@ std::vector<unsigned char> ChainstateManager::GenerateCoinbaseCommitment(CBlock&
 bool HasValidProofOfWork(const std::vector<CBlockHeader>& headers, const Consensus::Params& consensusParams)
 {
     return std::all_of(headers.cbegin(), headers.cend(),
-            [&](const auto& header) { return CheckProofOfWork(header.GetHash(),
-                                                              header.GetSHA256(),
+            [&](const auto& header) { return CheckProofOfWork(header.GetSHA256(),
                                                               header.nBits,
-                                                              header.hashRandomX,
                                                               header.vdfSolution,
                                                               consensusParams);});
 }

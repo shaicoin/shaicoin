@@ -32,14 +32,57 @@
 
 #include <boost/thread.hpp>
 #include <queue>
-
-#include <randomx.h>
 #include <random>
 
 using namespace std;
 using node::BlockAssembler;
 using node::CBlockTemplate;
 using node::UpdateTime;
+
+bool make_genesis = false; // remove this and any code it touches
+// also change where pblock is set
+
+static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesisOutputScript, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
+{
+    CMutableTransaction txNew;
+    txNew.nVersion = 1;
+    txNew.vin.resize(1);
+    txNew.vout.resize(1);
+    txNew.vin[0].scriptSig = CScript() << nBits << CScriptNum(4) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
+    txNew.vout[0].nValue = genesisReward;
+    txNew.vout[0].scriptPubKey = genesisOutputScript;
+
+    CBlock genesis;
+    genesis.nTime    = nTime;
+    genesis.nBits    = nBits;
+    genesis.nNonce   = nNonce;
+    genesis.nVersion = nVersion;
+    genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
+    genesis.hashPrevBlock.SetNull();
+    genesis.vdfSolution.fill(USHRT_MAX);
+
+    genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
+
+    return genesis;
+}
+
+/**
+ * Build the genesis block. Note that the output of its generation
+ * transaction cannot be spent since it did not originally exist in the
+ * database.
+ *
+ * CBlock(hash=000000000019d6, ver=1, hashPrevBlock=00000000000000, hashMerkleRoot=4a5e1e, nTime=1231006505, nBits=1d00ffff, nNonce=2083236893, vtx=1)
+ *   CTransaction(hash=4a5e1e, ver=1, vin.size=1, vout.size=1, nLockTime=0)
+ *     CTxIn(COutPoint(000000, -1), coinbase 04ffff001d0104455468652054696d65732030332f4a616e2f32303039204368616e63656c6c6f72206f6e206272696e6b206f66207365636f6e64206261696c6f757420666f722062616e6b73)
+ *     CTxOut(nValue=50.00000000, scriptPubKey=0x5F1DF16B2B704C8A578D0B)
+ *   vMerkleTree: 4a5e1e
+ */
+static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
+{
+    const char* pszTimestamp = "Proof-of-work is essentially one-CPU-one-vote";
+    const CScript genesisOutputScript = CScript() << ParseHex("046f93d36211501191a15cddf852fed215cd16135c2484832f801f3512e60b3d8b69be5a6b181ad7f18062bdd2d2906a2c90245476f74fffc9ab7af5780f55344b") << OP_CHECKSIG;
+    return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
+}
 
 //////////////////////////////////////////////////////////////////////////////
 //
@@ -71,14 +114,11 @@ bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, Cha
         uint256 first_hash = pblock->GetSHA256();
         //  - Needs to sha256 twice
         uint256 second_hash = (HashWriter{} << first_hash).GetSHA256();
-        //  - utilizing the first and second sha256 create randomx hash
-        uint256 randomx_hash = calculate_randomx_hash(first_hash.ToString(),
-                                                      second_hash.ToString());
-        //  - utilizing the second sha256 and randomx hash. XOR and construct the graph.
-        uint256 graph_construction_hash = second_hash ^ randomx_hash;
+        //  - utilizing the first_hash and second sha256 hash. XOR and construct the graph.
+        uint256 graph_construction_hash = first_hash ^ second_hash;
         //  - Find a hamiltonian cycle
         HCGraphUtil util{};
-        std::array<uint16_t, 1992> vdf_solution;
+        std::array<uint16_t, GRAPH_SIZE> vdf_solution;
         vdf_solution.fill(USHRT_MAX);
 
         std::vector<uint16_t> vdf_possible = util.findHamiltonianCycle(graph_construction_hash);
@@ -90,14 +130,23 @@ bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, Cha
 
         std::copy_n(vdf_possible.begin(), std::min(vdf_possible.size(), vdf_solution.size()), vdf_solution.begin());
 
-        for (size_t attempts = 0; attempts < 1992; ++attempts) {
+        for (size_t attempts = 0; attempts < GRAPH_SIZE; ++attempts) {
             uint256 gold_hash = (HashWriter{} << vdf_solution).GetSHA256();
             //std::cout << "Gold hash: " << gold_hash.ToString() << std::endl;
             if (UintToArith256(gold_hash) <= arith_uint256().SetCompact(pblock->nBits)) {
-                pblock->hashRandomX = randomx_hash;
                 pblock->vdfSolution = vdf_solution;
 
                 *phash = pblock->GetHash();
+
+                if(make_genesis) {
+                    std::cout << "Found gold: " << nNonce << std::endl;
+                    for(auto item : vdf_solution) {
+                        std::cout << item << ", ";
+                    }
+                    std::cout << std::endl;
+                    shouldMine = false;
+                    return false;
+                }
 
                 return true;
             } else {
@@ -141,13 +190,15 @@ void static ShaicoinMiner(const CChainParams& chainparams,
         while (shouldMine) {
             // Busy-wait for the network to come online so we don't waste time mining
             // on an obsolete chain.
-            do {
-                if (conman.GetNodeCount(ConnectionDirection::Both) > 0 && !chainman.IsInitialBlockDownload()) {
-                    break;
-                }
-                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-                std::cout << "ShaicoinMiner Waiting for peers" << std::endl;
-            } while (shouldMine);
+            if(make_genesis) {}
+            else {
+                do {
+                    if (conman.GetNodeCount(ConnectionDirection::Both) > 0 && !chainman.IsInitialBlockDownload()) {
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                } while (shouldMine);
+            }
 
             //
             // Create new block
@@ -170,6 +221,8 @@ void static ShaicoinMiner(const CChainParams& chainparams,
                 return;
             }
 
+            //auto genesis = CreateGenesisBlock(1719671111, 42, 0x1f00ffff, 1, 50 * COIN);
+            //CBlock* pblock = &genesis;
             CBlock* pblock = &pblocktemplate->block;
             pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 

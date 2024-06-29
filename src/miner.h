@@ -10,7 +10,6 @@
 #include <validation.h>
 #include <stdint.h>
 #include <net.h>
-#include <randomx.h>
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -20,37 +19,6 @@ class CReserveKey;
 class CScript;
 class CWallet;
 namespace Consensus { struct Params; };
-
-uint256 static calculate_randomx_hash(const std::string& key,
-                                      const std::string& input) {
-    randomx_flags flag_pole = RANDOMX_FLAG_DEFAULT;
-
-    // Allocate RandomX dataset
-    randomx_cache* cache = randomx_alloc_cache(flag_pole);
-    if (!cache) {
-        throw std::runtime_error("Failed to allocate RandomX cache.");
-    }
-
-    // Initialize cache
-    randomx_init_cache(cache, key.data(), key.size());
-
-    // Allocate RandomX VM
-    randomx_vm* vm = randomx_create_vm(flag_pole, cache, nullptr);
-    if (!vm) {
-        randomx_release_cache(cache);
-        throw std::runtime_error("Failed to create RandomX VM.");
-    }
-
-    // Compute hash
-    uint8_t calculated_hash[RANDOMX_HASH_SIZE];
-    randomx_calculate_hash(vm, input.data(), input.size(), calculated_hash);
-
-    // Clean up
-    randomx_destroy_vm(vm);
-    randomx_release_cache(cache);
-
-    return uint256(calculated_hash);
-}
 
 class HCGraphUtil {
     std::chrono::time_point<Clock> startTime;
@@ -70,7 +38,7 @@ class HCGraphUtil {
 
 
     bool static verifyHamiltonianCycle(const std::vector<std::vector<bool>>& graph,
-                                       const std::array<uint16_t, 1992>& path)
+                                       const std::array<uint16_t, GRAPH_SIZE>& path)
     {
         size_t path_size = 0;
         auto it = std::find(path.begin(), path.end(), USHRT_MAX);
@@ -110,7 +78,7 @@ class HCGraphUtil {
         unsigned long long gridSize = hexToType<unsigned long long>(gridSizeSegment);
         
         int minGridSize = 512;
-        int maxGridSize = 1992;
+        int maxGridSize = GRAPH_SIZE;
         int numSegments = 1480;
         
         double segmentSize = static_cast<double>(maxGridSize - minGridSize) / numSegments;
@@ -208,13 +176,13 @@ class HCGraphUtil {
         return path;
     }
 
-    void shift(std::array<uint16_t, 1992>& arr) {
+    void shift(std::array<uint16_t, GRAPH_SIZE>& arr) {
         if (!arr.empty()) {
             std::rotate(arr.rbegin(), arr.rbegin() + 1, arr.rend());
         }
     }
 
-    void reverse_shift(std::array<uint16_t, 1992>& arr) {
+    void reverse_shift(std::array<uint16_t, GRAPH_SIZE>& arr) {
         if (!arr.empty()) {
             std::rotate(arr.begin(), arr.begin() + 1, arr.end());
         }

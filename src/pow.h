@@ -10,6 +10,8 @@
 
 #include <stdint.h>
 
+static const size_t GRAPH_SIZE = 2008;
+
 class CBlockHeader;
 class CBlockIndex;
 class uint256;
@@ -17,11 +19,9 @@ class uint256;
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params&);
 
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
-bool CheckProofOfWork(uint256 hash,
-                      uint256 shaTwoFiftySixHash,
+bool CheckProofOfWork(uint256 first_sha_hash,
                       unsigned int nBits,
-                      uint256 hashRandomX,
-                      const std::array<uint16_t, 1992>& vdfSolution,
+                      const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
                       const Consensus::Params& params);
 
 /**

@@ -161,11 +161,9 @@ bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t heig
     return true;
 }
 
-bool CheckProofOfWork(uint256 hash,
-                      uint256 shaTwoFiftySixHash,
+bool CheckProofOfWork(uint256 first_sha_hash,
                       unsigned int nBits,
-                      uint256 hashRandomX,
-                      const std::array<uint16_t, 1992>& vdfSolution,
+                      const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
                       const Consensus::Params& params)
 {
     bool fNegative;
@@ -179,30 +177,25 @@ bool CheckProofOfWork(uint256 hash,
         return false;
     }
 
+    uint256 gold_hash = (HashWriter{} << vdfSolution).GetSHA256();
     // Check proof of work matches claimed amount
-    if (UintToArith256(hash) > bnTarget) {
+    if (UintToArith256(gold_hash) > bnTarget) {
         return false;
     }
 
-    // construct RandomX
-    uint256 second_hash = (HashWriter{} << shaTwoFiftySixHash).GetSHA256();
-    // uint256 randomx_hash = calculate_randomx_hash(shaTwoFiftySixHash.ToString(),
-    //                                               second_hash.ToString());
-    // if(randomx_hash != hashRandomX) {
-    //     return false;
-    // }
-
+    // construct second sha hash
+    uint256 second_hash = (HashWriter{} << first_sha_hash).GetSHA256();
     // construct VDF Graph
-    uint256 graph_construction_hash = second_hash ^ hashRandomX;
+    uint256 graph_construction_hash = first_sha_hash ^ second_hash;
     HCGraphUtil util{};
     size_t grid_size = util.getGridSize(graph_construction_hash.ToString());
     std::vector<std::vector<bool>> graph = util.generateGraph(graph_construction_hash, grid_size);
 
-    std::array<uint16_t, 1992> vdf_solution {};
+    std::array<uint16_t, GRAPH_SIZE> vdf_solution {};
     std::copy(vdfSolution.begin(), vdfSolution.end(), vdf_solution.begin());
 
     bool found_zero = false;
-    for(size_t i = 0; i < 1992; i++) {
+    for(size_t i = 0; i < GRAPH_SIZE; i++) {
         if(vdf_solution[0] == 0) {
             found_zero = true;
             break;

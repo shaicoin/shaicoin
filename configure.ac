@@ -1381,21 +1381,6 @@ if test "$use_upnp" != "no"; then
   CPPFLAGS="$TEMP_CPPFLAGS"
 fi
 
-# Check for RandomX header file
-AC_MSG_CHECKING([for randomx.h])
-CURRENT_DIR=`pwd`
-CPPFLAGS="$CPPFLAGS -I$CURRENT_DIR/src/randomx/src/"
-AC_CHECK_HEADERS([randomx.h], [have_randomx_h=yes], [have_randomx_h=no])
-if test "x$have_randomx_h" = "xno"; then
-  AC_MSG_ERROR([randomx.h header file not found])
-fi
-
-AC_CHECK_FILE([$CURRENT_DIR/src/randomx/librandomx.a], [have_randomx=yes], [have_randomx=no])
-if test "$have_randomx" = "no"; then
-  AC_MSG_ERROR([librandomx.a not found in src/randomx])
-fi
-LDFLAGS="$LDFLAGS -L$CURRENT_DIR/src/randomx -lrandomx"
-
 dnl Check for libnatpmp (optional).
 if test "$use_natpmp" != "no"; then
   TEMP_CPPFLAGS="$CPPFLAGS"

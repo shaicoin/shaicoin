@@ -6,15 +6,7 @@ Some notes on how to build Bitcoin Core in Unix.
 
 To Build
 ---------------------
-make sure to clone the repo with --recurse-submodules
-```bash
-cd src/randomx
-mkdir build && cd build
-cmake ..
-make -j{threads}
-mv librandomx.a ../
-cd ../../../
-```
+
 ```bash
 ./autogen.sh
 ./configure

@@ -129,8 +129,11 @@ bool BlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, s
                 pindexNew->nNonce         = diskindex.nNonce;
                 pindexNew->nStatus        = diskindex.nStatus;
                 pindexNew->nTx            = diskindex.nTx;
-                pindexNew->hashRandomX    = diskindex.hashRandomX;
                 pindexNew->vdfSolution    = diskindex.vdfSolution;
+
+                if (!CheckProofOfWork(pindexNew->GetBlockHeader().GetSHA256(), pindexNew->nBits, pindexNew->vdfSolution, consensusParams)) {
+                    return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
+                }
 
                 pcursor->Next();
             } else {
@@ -1040,10 +1043,8 @@ bool BlockManager::ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos) cons
     }
 
     // Check the header
-    if (!CheckProofOfWork(block.GetHash(),
-                          block.GetSHA256(),
+    if (!CheckProofOfWork(block.GetSHA256(),
                           block.nBits,
-                          block.hashRandomX,
                           block.vdfSolution,
                           GetConsensus())) {
         return error("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
