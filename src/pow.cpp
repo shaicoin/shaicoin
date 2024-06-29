@@ -186,14 +186,14 @@ bool CheckProofOfWork(uint256 hash,
 
     // construct RandomX
     uint256 second_hash = (HashWriter{} << shaTwoFiftySixHash).GetSHA256();
-    uint256 randomx_hash = calculate_randomx_hash(shaTwoFiftySixHash.ToString(),
-                                                  second_hash.ToString());
-    if(randomx_hash != hashRandomX) {
-        return false;
-    }
+    // uint256 randomx_hash = calculate_randomx_hash(shaTwoFiftySixHash.ToString(),
+    //                                               second_hash.ToString());
+    // if(randomx_hash != hashRandomX) {
+    //     return false;
+    // }
 
     // construct VDF Graph
-    uint256 graph_construction_hash = second_hash ^ randomx_hash;
+    uint256 graph_construction_hash = second_hash ^ hashRandomX;
     HCGraphUtil util{};
     size_t grid_size = util.getGridSize(graph_construction_hash.ToString());
     std::vector<std::vector<bool>> graph = util.generateGraph(graph_construction_hash, grid_size);

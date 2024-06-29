@@ -21,14 +21,13 @@ src/test/test_bitcoin
 src/qt/test/test_bitcoin-qt
 
 src/shaicoind
+src/shaicoin-cli
 src/shaicoin-gui
 src/shaicoin-node
-src/shaicoin-cli
-src/shaicoin-cli
 src/shaicoin-tx
 src/shaicoin-util
-src/shaicoin-wallet
 src/shaicoin-chainstate
+src/shaicoin-wallet
 
 # autoreconf
 Makefile.in
