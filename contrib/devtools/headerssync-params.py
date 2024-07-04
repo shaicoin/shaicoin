@@ -15,7 +15,7 @@ import random
 TIME = datetime(2026, 10, 5)
 
 # Expected block interval. [timedelta]
-BLOCK_INTERVAL = timedelta(seconds=600)
+BLOCK_INTERVAL = timedelta(seconds=300)
 
 # The number of headers corresponding to the minchainwork parameter. [headers]
 MINCHAINWORK_HEADERS = 804000

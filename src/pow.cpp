@@ -129,7 +129,7 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast,
                                  const CBlockHeader *pblock,
                                  const Consensus::Params& params) {
     assert(pindexLast != nullptr);
-
+    
     if (pindexLast->nHeight <= (sample_window + 1)) {
         return bnProofOfWorkLimit.GetCompact();
     }
@@ -164,8 +164,7 @@ bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t heig
 bool CheckProofOfWork(uint256 first_sha_hash,
                       unsigned int nBits,
                       const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
-                      const Consensus::Params& params)
-{
+                      const Consensus::Params& params) {
     bool fNegative;
     bool fOverflow;
     arith_uint256 bnTarget;

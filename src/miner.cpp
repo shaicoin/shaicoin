@@ -221,7 +221,7 @@ void static ShaicoinMiner(const CChainParams& chainparams,
                 return;
             }
 
-            //auto genesis = CreateGenesisBlock(1719671111, 42, 0x1f00ffff, 1, 50 * COIN);
+            //auto genesis = CreateGenesisBlock(1720471420, 42, 0x1f00ffff, 1, 50 * COIN);
             //CBlock* pblock = &genesis;
             CBlock* pblock = &pblocktemplate->block;
             pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
