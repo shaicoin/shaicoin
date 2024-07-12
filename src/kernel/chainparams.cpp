@@ -105,8 +105,8 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = 1628640000; // August 11th, 2021
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 0; // Approximately November 12th, 2021
 
-        consensus.nMinimumChainWork = uint256S("0");
-        consensus.defaultAssumeValid = uint256S("0x0000a3b5d72c1253bc7c4eeb8a82fddfad1db429595a4525864f951c4210efcd");
+        consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000000000000033fbb68bb");
+        consensus.defaultAssumeValid = uint256S("0x00000225796f6459757253ddd13d5d341ac06442c4726e4a89b291e935c42e06");
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -152,7 +152,8 @@ public:
 
         checkpointData = {
             {
-                { 0, uint256S("0x0000a3b5d72c1253bc7c4eeb8a82fddfad1db429595a4525864f951c4210efcd")},
+                { 0, uint256S("0x0000a3b5d72c1253bc7c4eeb8a82fddfad1db429595a4525864f951c4210efcd") },
+                { 1100, uint256S("0x0000009b16de48bc340022acf3a1da667c4109b8b55face581b69233814935dc") }
             }
         };
 
@@ -161,7 +162,7 @@ public:
         };
 
         chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 555 000000000000000000026811d149d4d261995ec5b3f64f439a0a10e1a464af9a
+            // Data from RPC: getchaintxstats 1100 0000009b16de48bc340022acf3a1da667c4109b8b55face581b69233814935dc
             // .nTime    = 1720065974,
             // .nTxCount = 1555,
             // .dTxRate  = 0.003964682455706465,
