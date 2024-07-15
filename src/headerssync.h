@@ -30,6 +30,7 @@ struct CompressedHeader {
     CompressedHeader()
     {
         hashMerkleRoot.SetNull();
+        vdfSolution.fill(USHRT_MAX);
     }
 
     CompressedHeader(const CBlockHeader& header)
