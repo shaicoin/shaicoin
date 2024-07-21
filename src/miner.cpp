@@ -187,9 +187,6 @@ void static ShaicoinMiner(const CChainParams& chainparams,
 
         std::cout << "ShaicoinMiner started" << std::endl;
 
-        auto start_time = std::chrono::high_resolution_clock::now();
-        uint64_t total_hashes = 0;
-
         while (shouldMine) {
             // Busy-wait for the network to come online so we don't waste time mining
             // on an obsolete chain.
