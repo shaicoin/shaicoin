@@ -14,111 +14,49 @@
 
 typedef long long int64;
 
-static const int64 nTargetSpacing = 5 * 60;  // 5 minute block time target
-static arith_uint256 bnProofOfWorkLimit(~arith_uint256(0) >> 16);
+static const int64 nTargetSpacing = 2 * 60;  // 2 minute block time target
+static arith_uint256 bnProofOfWorkLimit(~arith_uint256(0) >> 9);
 static const uint8_t sample_window = 4;
 static_assert(nTargetSpacing != 0);
 
-int static mapNumber(double x, int in_min, int in_max, int out_min, int out_max) {
+int64_t static mapNumber(int64_t x, int64_t in_min, int64_t in_max, int64_t out_min, int64_t out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-//
-//  The catcoin inspiration code had a non typical PID controller calculator
-//  so we had to rewrite it from scratch below are the details
-//
-//  1. Error calculation:
-//      error = setpoint - measured_value;
-//
-//  2. Proportional term (P):
-//      P_out = Kp * error;
-//
-//  3. Integral term (I):
-//      integral += error;
-//      I_out = Ki * integral;
-//
-//  4. Derivative term (D):
-//      derivative = (error - previous_error) / dt;
-//      D_out = Kd * derivative;
-//
-//  5. Combine the terms:
-//      output = P_out + I_out;
-//
-//  6. Average the output and make asymmetric adjustment (DigiShield Inspired)
-//
-//  Where:
-//  - measured_value: The current value being measured.
-//  - setpoint: The desired target value.
-//  - Kp: Proportional gain.
-//  - Ki: Integral gain.
-//  - Kd: Derivative gain.
-//  - dt: Time difference between the current and previous measurement.
-//  - error: Difference between the measured value and the setpoint.
-//  - integral: Accumulated sum of previous errors (for the integral term).
-//  - previous_error: The error from the previous time step (for the derivative term).
-//  - output: The final control output.
-unsigned int static GetNextWorkRequired_PID(const CBlockIndex* pindexLast,
-                                            const CBlockHeader *pblock,
-                                            const Consensus::Params& params)
-{
+unsigned int GetNextWorkRequired_ShaiHive(const CBlockIndex* pindexLast,
+                                          const CBlockHeader *pblock,
+                                          const Consensus::Params& params) {
     arith_uint256 bnNew;
     bnNew.SetCompact(pindexLast->nBits);
 
-    double kpGain = 0.716;
-    double kiGain = 0.333;
-    double kdGain = 0.042;
-
-    int64_t integral_term = 0;
-    double u_there = 0;
-    int64_t buffer[sample_window];
-
     const CBlockIndex* pindexFirst = pindexLast;
-    int i = sample_window - 1;
-    while(i >= 0) {
-        buffer[i] = pindexFirst->GetBlockTime();
-        pindexFirst = pindexFirst->pprev;
-        if(i > 0) {
-            i = i - 1;
-        } else {
-            break;
-        }
+    const CBlockIndex* pindexSecond = pindexLast->pprev;
+    uint64_t average_difference = 0;
+
+    for(size_t i = 0; i < sample_window; i++) {
+        average_difference += (pindexFirst->GetBlockTime() - pindexSecond->GetBlockTime());
     }
+    average_difference = average_difference / sample_window;
 
-    for(size_t index = 1; index < sample_window; index++) {
-        int64_t time_between_blocks = buffer[index] - buffer[index - 1];
-        int64_t time_between_old_blocks = (index == 1) ? 0 : buffer[index - 1] - buffer[index - 2];
+    int64_t balanced_diff = average_difference - nTargetSpacing;
 
-        int64_t current_system_error = nTargetSpacing - time_between_blocks;
-        int64_t previous_system_error = (index == 1) ? 0 : nTargetSpacing - time_between_old_blocks;
-        
-        integral_term += current_system_error;
-
-        double p = kpGain * current_system_error;
-        double i = kiGain * integral_term;
-        double d = (time_between_blocks == 0) ? 0 : kdGain * ((current_system_error - previous_system_error) / time_between_blocks);
-
-        u_there += p + i + d;
-    }
-
-    double rounded_value = std::round(u_there / (sample_window - 1));
-
-    if(rounded_value < -42) { // longer than normal
-        double max_adjustment = -nTargetSpacing;
-        if(rounded_value < max_adjustment) {
-            rounded_value = max_adjustment;
+    if(balanced_diff >= 42) {
+        // need to make it easier
+        if(balanced_diff > 600) {
+            balanced_diff = 600;
         }
-        bnNew *= mapNumber(-rounded_value, 42, -max_adjustment, 105, 132);
+        bnNew *= mapNumber(balanced_diff, 42, 600, 105, 132);
         bnNew /= 100;
-    } else if(rounded_value > 42) { // shorter than normal
-        double max_adjustment = nTargetSpacing * 1.24;
-        if(rounded_value > max_adjustment) {
-            rounded_value = max_adjustment;
+    } else if(balanced_diff <= -42) {
+        // need to make it harder
+        if(balanced_diff < -nTargetSpacing) {
+            balanced_diff = -nTargetSpacing;
         }
         bnNew *= 100;
-        bnNew /= mapNumber(rounded_value, 42, max_adjustment, 102, 116);
+        bnNew /= mapNumber(-balanced_diff, 42, nTargetSpacing, 102, 116);
     }
 
-    if (bnNew > bnProofOfWorkLimit || (bnNew.getdouble() == 0)) {
+    if (bnNew > bnProofOfWorkLimit) {
         bnNew = bnProofOfWorkLimit;
     }
 
@@ -134,7 +72,7 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast,
         return bnProofOfWorkLimit.GetCompact();
     }
     
-	return GetNextWorkRequired_PID(pindexLast, pblock, params);
+	return GetNextWorkRequired_ShaiHive(pindexLast, pblock, params);
 }
 
 // Check that on difficulty adjustments, the new difficulty does not increase
@@ -184,28 +122,13 @@ bool CheckProofOfWork(uint256 first_sha_hash,
 
     // construct second sha hash
     uint256 second_hash = (HashWriter{} << first_sha_hash).GetSHA256();
+    
     // construct VDF Graph
     uint256 graph_construction_hash = first_sha_hash ^ second_hash;
     HCGraphUtil util{};
     size_t grid_size = util.getGridSize(graph_construction_hash.ToString());
     std::vector<std::vector<bool>> graph = util.generateGraph(graph_construction_hash, grid_size);
 
-    std::array<uint16_t, GRAPH_SIZE> vdf_solution {};
-    std::copy(vdfSolution.begin(), vdfSolution.end(), vdf_solution.begin());
-
-    bool found_zero = false;
-    for(size_t i = 0; i < GRAPH_SIZE; i++) {
-        if(vdf_solution[0] == 0) {
-            found_zero = true;
-            break;
-        }
-        util.reverse_shift(vdf_solution);
-    }
-    
-    if(found_zero == false) {
-        return false;
-    }
-
     // verify the vdf solution
-    return util.verifyHamiltonianCycle(graph, vdf_solution);
+    return util.verifyHamiltonianCycle(graph, vdfSolution);
 }

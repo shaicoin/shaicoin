@@ -74,16 +74,19 @@ class HCGraphUtil {
 
     uint16_t getGridSize(const std::string& hash)
     {
-        std::string gridSizeSegment = hash.substr(0, 4);
-        unsigned long long gridSize = hexToType<unsigned long long>(gridSizeSegment);
-        
         int minGridSize = 512;
         int maxGridSize = GRAPH_SIZE;
-        int numSegments = 1480;
-        
-        double segmentSize = static_cast<double>(maxGridSize - minGridSize) / numSegments;
-        int normalizedGridSize = minGridSize + static_cast<int>(gridSize % numSegments * segmentSize);
-        
+        std::string gridSizeSegment = hash.substr(0, 8);
+        unsigned long long gridSize = hexToType<unsigned long long>(gridSizeSegment);
+
+        // Normalize gridSize to within the range
+        int normalizedGridSize = minGridSize + (gridSize % (maxGridSize - minGridSize));
+
+        // Adjust to hit maxGridSize more frequently
+        if ((gridSize % 8) == 0)
+        {
+            normalizedGridSize = maxGridSize;
+        }
         return normalizedGridSize;
     }
 
@@ -174,18 +177,6 @@ class HCGraphUtil {
         }
         // hmm we are returning -1 in path potentially
         return path;
-    }
-
-    void shift(std::array<uint16_t, GRAPH_SIZE>& arr) {
-        if (!arr.empty()) {
-            std::rotate(arr.rbegin(), arr.rbegin() + 1, arr.rend());
-        }
-    }
-
-    void reverse_shift(std::array<uint16_t, GRAPH_SIZE>& arr) {
-        if (!arr.empty()) {
-            std::rotate(arr.begin(), arr.begin() + 1, arr.end());
-        }
     }
 };
 

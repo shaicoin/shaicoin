@@ -102,6 +102,7 @@ static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits
 //      .'` \     |_
 //           '-__ / `-
 std::atomic<bool> shouldMine{};
+std::atomic<uint64_t> total_hashes{0};
 
 bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, ChainstateManager& chainman) {
     int64_t nStart = GetTime();
@@ -130,28 +131,27 @@ bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, Cha
 
         std::copy_n(vdf_possible.begin(), std::min(vdf_possible.size(), vdf_solution.size()), vdf_solution.begin());
 
-        for (size_t attempts = 0; attempts < GRAPH_SIZE; ++attempts) {
-            uint256 gold_hash = (HashWriter{} << vdf_solution).GetSHA256();
-            //std::cout << "Gold hash: " << gold_hash.ToString() << std::endl;
-            if (UintToArith256(gold_hash) <= arith_uint256().SetCompact(pblock->nBits)) {
-                pblock->vdfSolution = vdf_solution;
+        uint256 gold_hash = (HashWriter{} << vdf_solution).GetSHA256();
+        
+        total_hashes++;
 
-                *phash = pblock->GetHash();
+        //std::cout << "Gold hash: " << gold_hash.ToString() << std::endl;
+        if (UintToArith256(gold_hash) <= arith_uint256().SetCompact(pblock->nBits)) {
+            pblock->vdfSolution = vdf_solution;
 
-                if(make_genesis) {
-                    std::cout << "Found gold: " << nNonce << std::endl;
-                    for(auto item : vdf_solution) {
-                        std::cout << item << ", ";
-                    }
-                    std::cout << std::endl;
-                    shouldMine = false;
-                    return false;
+            *phash = pblock->GetHash();
+
+            if(make_genesis) {
+                std::cout << "Found gold: " << nNonce << std::endl;
+                for(auto item : vdf_solution) {
+                    std::cout << item << ", ";
                 }
-
-                return true;
-            } else {
-                util.shift(vdf_solution);
+                std::cout << std::endl;
+                shouldMine = false;
+                return false;
             }
+
+            return true;
         }
 
         bool stale_block = false;
@@ -187,6 +187,9 @@ void static ShaicoinMiner(const CChainParams& chainparams,
 
         std::cout << "ShaicoinMiner started" << std::endl;
 
+        auto start_time = std::chrono::high_resolution_clock::now();
+        uint64_t total_hashes = 0;
+
         while (shouldMine) {
             // Busy-wait for the network to come online so we don't waste time mining
             // on an obsolete chain.
@@ -221,7 +224,7 @@ void static ShaicoinMiner(const CChainParams& chainparams,
                 return;
             }
 
-            //auto genesis = CreateGenesisBlock(1720471420, 42, 0x1f00ffff, 1, 50 * COIN);
+            //auto genesis = CreateGenesisBlock(1721581639, 42, 0x1f7fffff, 1, 50 * COIN);
             //CBlock* pblock = &genesis;
             CBlock* pblock = &pblocktemplate->block;
             pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
@@ -304,6 +307,22 @@ ____/____\--...\___ \_||_/ ___...|__\-..|____\____/__
     std::cout << "ShaicoinMiner Ended" << std::endl;
 }
 
+void DisplayHashRate() {
+    auto start_time = std::chrono::high_resolution_clock::now();
+    while (shouldMine) {
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        auto current_time = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed_time = current_time - start_time;
+
+        uint64_t hashes = total_hashes.exchange(0);
+        double hash_rate = hashes / elapsed_time.count();
+
+        std::cout << std::fixed << std::setprecision(3) << hash_rate << " H/s" << std::endl;
+
+        start_time = std::chrono::high_resolution_clock::now();
+    }
+}
+
 void GenerateShaicoins(std::optional<CScript> minerAddress,
                        const CChainParams& chainparams,
                        ChainstateManager& chainman,
@@ -331,7 +350,7 @@ void GenerateShaicoins(std::optional<CScript> minerAddress,
 
     shouldMine = true;
 
-    minerThreads.resize(nThreads);
+    minerThreads.resize(nThreads + 1);
     for (size_t i = 0; i < nThreads; i++) {
         minerThreads[i] = std::thread(ShaicoinMiner,
                                       std::cref(chainparams),
@@ -340,4 +359,6 @@ void GenerateShaicoins(std::optional<CScript> minerAddress,
                                       std::cref(conman),
                                       std::cref(mempool));
     }
+
+    minerThreads.emplace_back(DisplayHashRate);
 }

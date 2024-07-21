@@ -1688,13 +1688,20 @@ PackageMempoolAcceptResult ProcessNewPackage(Chainstate& active_chainstate, CTxM
     return result;
 }
 
-CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams)
-{
-    if(nHeight >= consensusParams.tailEmissionBlockHeight) {
-        return CAmount { 10000000 }; // 0.1 KISMET
+CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams) {
+    CAmount nMinReward = CAmount { 10000000 };
+
+    if (nHeight >= consensusParams.tailEmissionBlockHeight) {
+        return nMinReward; // 0.1 KISMET
     }
-    double reward = 50.0 * std::exp(-0.00001 * static_cast<double>(nHeight));
-    return static_cast<CAmount>(reward * static_cast<double>(COIN));
+
+    CAmount nSubsidy = 50 * COIN;
+
+    int64_t rewardRange = nSubsidy - nMinReward;
+    int64_t rewardStep = rewardRange / consensusParams.tailEmissionBlockHeight;
+    int64_t reward = nSubsidy - rewardStep * nHeight;
+    
+    return reward;
 }
 
 CoinsViews::CoinsViews(DBParams db_params, CoinsViewOptions options)
@@ -1760,23 +1767,33 @@ void Chainstate::InitCoinsCache(size_t cache_size_bytes)
 //
 bool ChainstateManager::IsInitialBlockDownload() const
 {
+    //std::cout << "START" << std::endl;
     // Optimization: pre-test latch before taking the lock.
     if (m_cached_finished_ibd.load(std::memory_order_relaxed))
         return false;
 
+    //std::cout << "cache finished" << std::endl;
     LOCK(cs_main);
     if (m_cached_finished_ibd.load(std::memory_order_relaxed))
         return false;
+
+    //std::cout << "LOading blocks" << std::endl;
     if (m_blockman.LoadingBlocks()) {
         return true;
     }
+
+    //std::cout << "No tip" << std::endl;
     CChain& chain{ActiveChain()};
     if (chain.Tip() == nullptr) {
         return true;
     }
+
+    //std::cout << "less than min work" << std::endl;
     if (chain.Tip()->nChainWork < MinimumChainWork()) {
         return true;
     }
+
+    //std::cout << "Max Tip age" << std::endl;
     if (chain.Tip()->Time() < Now<NodeSeconds>() - m_options.max_tip_age) {
         return true;
     }

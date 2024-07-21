@@ -20,7 +20,7 @@
 class CChainParams;
 
 static constexpr bool DEFAULT_CHECKPOINTS_ENABLED{true};
-static constexpr auto DEFAULT_MAX_TIP_AGE{24h};
+static constexpr auto DEFAULT_MAX_TIP_AGE{240000000000000h};
 
 namespace kernel {
 
