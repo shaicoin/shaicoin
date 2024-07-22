@@ -16,7 +16,6 @@ typedef long long int64;
 
 static const int64 nTargetSpacing = 2 * 60;  // 2 minute block time target
 static arith_uint256 bnProofOfWorkLimit(~arith_uint256(0) >> 9);
-static const uint8_t sample_window = 4;
 static_assert(nTargetSpacing != 0);
 
 int64_t static mapNumber(int64_t x, int64_t in_min, int64_t in_max, int64_t out_min, int64_t out_max) {
@@ -25,20 +24,12 @@ int64_t static mapNumber(int64_t x, int64_t in_min, int64_t in_max, int64_t out_
 
 unsigned int GetNextWorkRequired_ShaiHive(const CBlockIndex* pindexLast,
                                           const CBlockHeader *pblock,
-                                          const Consensus::Params& params) {
+                                          const Consensus::Params& params) {    
     arith_uint256 bnNew;
     bnNew.SetCompact(pindexLast->nBits);
 
-    const CBlockIndex* pindexFirst = pindexLast;
-    const CBlockIndex* pindexSecond = pindexLast->pprev;
-    uint64_t average_difference = 0;
-
-    for(size_t i = 0; i < sample_window; i++) {
-        average_difference += (pindexFirst->GetBlockTime() - pindexSecond->GetBlockTime());
-    }
-    average_difference = average_difference / sample_window;
-
-    int64_t balanced_diff = average_difference - nTargetSpacing;
+    uint64_t difference = pblock->GetBlockTime() - pindexLast->GetBlockTime();
+    int64_t balanced_diff = difference - nTargetSpacing;
 
     if(balanced_diff >= 42) {
         // need to make it easier
@@ -67,11 +58,6 @@ unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast,
                                  const CBlockHeader *pblock,
                                  const Consensus::Params& params) {
     assert(pindexLast != nullptr);
-    
-    if (pindexLast->nHeight <= (sample_window + 1)) {
-        return bnProofOfWorkLimit.GetCompact();
-    }
-    
 	return GetNextWorkRequired_ShaiHive(pindexLast, pblock, params);
 }
 

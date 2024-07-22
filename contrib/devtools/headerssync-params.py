@@ -109,10 +109,10 @@ ASSUME_CONVEX = True
 COMPACT_HEADER_SIZE = 4064
 
 # How many bits a header uses in P2P protocol. [bits]
-NET_HEADER_SIZE = 81 * 8
+NET_HEADER_SIZE = 4097 * 8
 
 # How many headers are sent at once. [headers]
-HEADER_BATCH_COUNT = 2000
+HEADER_BATCH_COUNT = 40
 
 # Whether or not the offset of which blocks heights get checksummed is randomized.
 RANDOMIZE_OFFSET = True

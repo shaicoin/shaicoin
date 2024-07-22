@@ -135,7 +135,6 @@ bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, Cha
         
         total_hashes++;
 
-        //std::cout << "Gold hash: " << gold_hash.ToString() << std::endl;
         if (UintToArith256(gold_hash) <= arith_uint256().SetCompact(pblock->nBits)) {
             pblock->vdfSolution = vdf_solution;
 
@@ -162,7 +161,7 @@ bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, Cha
             }
         }
 
-        if(stale_block || (GetTime() - nStart > 60)) {
+        if(stale_block || (GetTime() - nStart > 15)) {
             return false;
         }
     }
@@ -221,7 +220,7 @@ void static ShaicoinMiner(const CChainParams& chainparams,
                 return;
             }
 
-            //auto genesis = CreateGenesisBlock(1721581639, 42, 0x1f7fffff, 1, 50 * COIN);
+            //auto genesis = CreateGenesisBlock(1722343420, 42, 0x1f7fffff, 1, 11 * COIN);
             //CBlock* pblock = &genesis;
             CBlock* pblock = &pblocktemplate->block;
             pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
@@ -232,12 +231,11 @@ void static ShaicoinMiner(const CChainParams& chainparams,
             arith_uint256 hashTarget = arith_uint256().SetCompact(pblock->nBits);
             uint256 hash;
             
-            //uint32_t nNonce = 0;
             uint32_t nNonce = []() {
-                std::random_device rd;  // Initialize a random device
-                std::mt19937 gen(rd()); // Seed the Mersenne Twister generator
-                std::uniform_int_distribution<uint32_t> dis(0, UINT32_MAX); // Define the distribution range
-                return dis(gen); // Generate and return the random number
+                std::random_device rd;
+                std::mt19937 gen(rd());
+                std::uniform_int_distribution<uint32_t> dis(0, UINT32_MAX);
+                return dis(gen);
             }();
 
             // Check if something found
@@ -328,7 +326,7 @@ void GenerateShaicoins(std::optional<CScript> minerAddress,
 {
     static std::vector<std::thread> minerThreads;
 
-    bool use_all_cores = true;
+    bool use_all_cores = false;//true;
 
     size_t nThreads = use_all_cores ? GetNumCores() : 1;
 

@@ -1690,18 +1690,22 @@ PackageMempoolAcceptResult ProcessNewPackage(Chainstate& active_chainstate, CTxM
 
 CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams) {
     CAmount nMinReward = CAmount { 10000000 };
-
+    
     if (nHeight >= consensusParams.tailEmissionBlockHeight) {
         return nMinReward; // 0.1 KISMET
     }
 
-    CAmount nSubsidy = 50 * COIN;
-
-    int64_t rewardRange = nSubsidy - nMinReward;
-    int64_t rewardStep = rewardRange / consensusParams.tailEmissionBlockHeight;
-    int64_t reward = nSubsidy - rewardStep * nHeight;
-    
-    return reward;
+    //
+    // For the rare reader who actually reads code
+    // when I modified bitcoin GetNextWorkRequired (similar to what dogecoin did)
+    // Shaicoin realized a bug that existed deep within the codebase of bitcoin
+    // and I have reason to believe it still exists on dogecoin today
+    // upon fixing the bug we needed to relaunch and payback everyone who originally mined
+    // plus use as incentive for community dev tasks that need to occur
+    if(nHeight == 1) {
+        return 420690 * COIN;
+    }
+    return 1100000000 - (nHeight * 1226);
 }
 
 CoinsViews::CoinsViews(DBParams db_params, CoinsViewOptions options)
@@ -3930,6 +3934,15 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
 
     // Check proof of work
     const Consensus::Params& consensusParams = chainman.GetConsensus();
+    std::cout << "VDF Solution" << std::endl;
+    // for(auto vdfItem : pindexPrev->GetBlockHeader().vdfSolution) {
+    //     std::cout << "Item: " << vdfItem;
+    // }
+    std::cout << "Block time: " << block.GetBlockTime()  << std::endl;
+    std::cout << "Block height: " << nHeight  << std::endl;
+    std::cout << "Block bits: " << block.nBits << std::endl;
+    std::cout << "Getwork bits: " << GetNextWorkRequired(pindexPrev, &block, consensusParams) << std::endl;
+    std::cout << std::endl;
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
 
