@@ -220,7 +220,7 @@ void static ShaicoinMiner(const CChainParams& chainparams,
                 return;
             }
 
-            //auto genesis = CreateGenesisBlock(1722343420, 42, 0x1f7fffff, 1, 11 * COIN);
+            //auto genesis = CreateGenesisBlock(1723206420, 42, 0x1f7fffff, 1, 11 * COIN);
             //CBlock* pblock = &genesis;
             CBlock* pblock = &pblocktemplate->block;
             pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
@@ -326,7 +326,7 @@ void GenerateShaicoins(std::optional<CScript> minerAddress,
 {
     static std::vector<std::thread> minerThreads;
 
-    bool use_all_cores = false;//true;
+    bool use_all_cores = true;
 
     size_t nThreads = use_all_cores ? GetNumCores() : 1;
 
