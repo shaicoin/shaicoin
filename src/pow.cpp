@@ -36,7 +36,7 @@ unsigned int GetNextWorkRequired_ShaiHive(const CBlockIndex* pindexLast,
         if(balanced_diff > 600) {
             balanced_diff = 600;
         }
-        bnNew *= mapNumber(balanced_diff, 42, 600, 105, 132);
+        bnNew *= mapNumber(balanced_diff, 42, 600, 102, 111);
         bnNew /= 100;
     } else if(balanced_diff <= -42) {
         // need to make it harder
@@ -44,7 +44,7 @@ unsigned int GetNextWorkRequired_ShaiHive(const CBlockIndex* pindexLast,
             balanced_diff = -nTargetSpacing;
         }
         bnNew *= 100;
-        bnNew /= mapNumber(-balanced_diff, 42, nTargetSpacing, 102, 116);
+        bnNew /= mapNumber(-balanced_diff, 42, nTargetSpacing, 101, 105);
     }
 
     if (bnNew > bnProofOfWorkLimit) {
