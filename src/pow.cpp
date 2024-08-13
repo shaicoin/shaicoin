@@ -73,11 +73,11 @@ bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t heig
     arith_uint256 max_increase = old_target;
     arith_uint256 max_decrease = old_target;
 
-    max_increase *= 133;
+    max_increase *= 112;
     max_increase /= 100;
 
     max_decrease *= 100;
-    max_decrease /= 117;
+    max_decrease /= 106;
 
     if (new_target > max_increase || new_target < max_decrease) {
         return false;

@@ -105,8 +105,8 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = 1628640000; // August 11th, 2021
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 0; // Approximately November 12th, 2021
 
-        consensus.nMinimumChainWork = uint256S("0");
-        consensus.defaultAssumeValid = uint256S("0x0019592cd5c0ef222adcaa85d4000602636a05e57b3541a844a90644815cacbb");
+        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000000000007ab536");
+        consensus.defaultAssumeValid = uint256S("0x00055e4e77d39cc2e0600eebdc773162824fb8d42359879b4916e1adcb0bf4f9");
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -124,8 +124,8 @@ public:
 
         genesis = CreateGenesisBlock(1723206420, 2847556069, 0x1f7fffff, 1, 11 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        std::cout << consensus.hashGenesisBlock.ToString() << std::endl;
-        std::cout << genesis.hashMerkleRoot.ToString() << std::endl;
+        // std::cout << consensus.hashGenesisBlock.ToString() << std::endl;
+        // std::cout << genesis.hashMerkleRoot.ToString() << std::endl;
         assert(consensus.hashGenesisBlock == uint256S("0x0019592cd5c0ef222adcaa85d4000602636a05e57b3541a844a90644815cacbb"));
         assert(genesis.hashMerkleRoot == uint256S("0x2a9f2576a15e81773726f78378842567276e3b43860290adfe30d113ca6cef76"));
 
@@ -153,7 +153,7 @@ public:
         checkpointData = {
             {
                 { 0, uint256S("0x0019592cd5c0ef222adcaa85d4000602636a05e57b3541a844a90644815cacbb") },
-                //{ 1100, uint256S("0x0000009b16de48bc340022acf3a1da667c4109b8b55face581b69233814935dc") }
+                { 2180, uint256S("0x00055e4e77d39cc2e0600eebdc773162824fb8d42359879b4916e1adcb0bf4f9") }
             }
         };
 
