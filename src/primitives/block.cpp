@@ -10,7 +10,10 @@
 
 uint256 CBlockHeader::GetHash() const
 {
-    return (HashWriter{} << vdfSolution).GetSHA256();
+    if(nTime <= 1723869065) {
+        return (HashWriter{} << vdfSolution).GetSHA256();
+    }
+    return (HashWriter{} << *this).GetHash();
 }
 
 uint256 CBlockHeader::GetSHA256() const

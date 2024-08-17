@@ -3673,7 +3673,9 @@ void ChainstateManager::ReceivedBlockTransactions(const CBlock& block, CBlockInd
 static bool CheckBlockHeader(const CBlockHeader& block, BlockValidationState& state, const Consensus::Params& consensusParams, bool fCheckPOW = true)
 {
     // Check proof of work matches claimed amount
-    if (fCheckPOW && !CheckProofOfWork(block.GetSHA256(),
+    if (fCheckPOW && !CheckProofOfWork(block.nTime,
+                                       block.GetSHA256(),
+                                       block.GetHash(),
                                        block.nBits,
                                        block.vdfSolution,
                                        consensusParams))
@@ -3870,7 +3872,9 @@ std::vector<unsigned char> ChainstateManager::GenerateCoinbaseCommitment(CBlock&
 bool HasValidProofOfWork(const std::vector<CBlockHeader>& headers, const Consensus::Params& consensusParams)
 {
     return std::all_of(headers.cbegin(), headers.cend(),
-            [&](const auto& header) { return CheckProofOfWork(header.GetSHA256(),
+            [&](const auto& header) { return CheckProofOfWork(header.nTime,
+                                                              header.GetSHA256(),
+                                                              header.GetHash(),
                                                               header.nBits,
                                                               header.vdfSolution,
                                                               consensusParams);});

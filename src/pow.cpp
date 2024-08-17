@@ -22,7 +22,7 @@ int64_t static mapNumber(int64_t x, int64_t in_min, int64_t in_max, int64_t out_
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
 
-unsigned int GetNextWorkRequired_ShaiHive(const CBlockIndex* pindexLast,
+unsigned int GetNextWorkRequired_ShaiHive_V1(const CBlockIndex* pindexLast,
                                           const CBlockHeader *pblock,
                                           const Consensus::Params& params) {    
     arith_uint256 bnNew;
@@ -54,11 +54,46 @@ unsigned int GetNextWorkRequired_ShaiHive(const CBlockIndex* pindexLast,
     return bnNew.GetCompact();
 }
 
+unsigned int GetNextWorkRequired_ShaiHive_V2(const CBlockIndex* pindexLast,
+                                          const CBlockHeader *pblock,
+                                          const Consensus::Params& params) {    
+    arith_uint256 bnNew;
+    bnNew.SetCompact(pindexLast->nBits);
+
+    uint64_t difference = pindexLast->GetBlockTime() - pindexLast->GetAncestor(pindexLast->nHeight - 1)->GetBlockTime();
+    int64_t balanced_diff = difference - nTargetSpacing;
+
+    if(balanced_diff >= 42) {
+        // need to make it easier
+        if(balanced_diff > 600) {
+            balanced_diff = 600;
+        }
+        bnNew *= mapNumber(balanced_diff, 42, 600, 102, 111);
+        bnNew /= 100;
+    } else if(balanced_diff <= -42) {
+        // need to make it harder
+        if(balanced_diff < -nTargetSpacing) {
+            balanced_diff = -nTargetSpacing;
+        }
+        bnNew *= 100;
+        bnNew /= mapNumber(-balanced_diff, 42, nTargetSpacing, 101, 105);
+    }
+
+    if (bnNew > bnProofOfWorkLimit) {
+        bnNew = bnProofOfWorkLimit;
+    }
+
+    return bnNew.GetCompact();
+}
+
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast,
                                  const CBlockHeader *pblock,
                                  const Consensus::Params& params) {
     assert(pindexLast != nullptr);
-	return GetNextWorkRequired_ShaiHive(pindexLast, pblock, params);
+    if(pindexLast->nHeight <= 4349) {
+        return GetNextWorkRequired_ShaiHive_V1(pindexLast, pblock, params);
+    }
+    return GetNextWorkRequired_ShaiHive_V2(pindexLast, pblock, params);
 }
 
 // Check that on difficulty adjustments, the new difficulty does not increase
@@ -85,10 +120,10 @@ bool PermittedDifficultyTransition(const Consensus::Params& params, int64_t heig
     return true;
 }
 
-bool CheckProofOfWork(uint256 first_sha_hash,
-                      unsigned int nBits,
-                      const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
-                      const Consensus::Params& params) {
+bool CheckProofOfWork_V1(uint256 first_sha_hash,
+                         unsigned int nBits,
+                         const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
+                         const Consensus::Params& params) {
     bool fNegative;
     bool fOverflow;
     arith_uint256 bnTarget;
@@ -117,4 +152,45 @@ bool CheckProofOfWork(uint256 first_sha_hash,
 
     // verify the vdf solution
     return util.verifyHamiltonianCycle(graph, vdfSolution);
+}
+
+
+bool CheckProofOfWork_V2(uint256 first_sha_hash,
+                         uint256 block_sha_hash,
+                         unsigned int nBits,
+                         const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
+                         const Consensus::Params& params) {
+    bool fNegative;
+    bool fOverflow;
+    arith_uint256 bnTarget;
+
+    bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
+
+    // Check range
+    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit)) {
+        return false;
+    }
+
+    if (UintToArith256(block_sha_hash) > bnTarget) {
+        return false;
+    }
+
+    // construct VDF Graph
+    HCGraphUtil util{};
+    size_t grid_size = util.getGridSize(first_sha_hash.ToString());
+    std::vector<std::vector<bool>> graph = util.generateGraph(first_sha_hash, grid_size);
+    // verify the vdf solution
+    return util.verifyHamiltonianCycle(graph, vdfSolution);
+}
+
+bool CheckProofOfWork(int nTime,
+                      uint256 first_sha_hash,
+                      uint256 block_sha_hash,
+                      unsigned int nBits,
+                      const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
+                      const Consensus::Params& params) {
+    if(nTime <= 1723869065) {
+        return CheckProofOfWork_V1(first_sha_hash, nBits, vdfSolution, params);
+    }
+    return CheckProofOfWork_V2(first_sha_hash, block_sha_hash, nBits, vdfSolution, params);
 }

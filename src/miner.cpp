@@ -39,6 +39,7 @@ using node::BlockAssembler;
 using node::CBlockTemplate;
 using node::UpdateTime;
 
+bool legacy_miner = false;
 bool make_genesis = false; // remove this and any code it touches
 // also change where pblock is set
 
@@ -113,10 +114,14 @@ bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, Cha
         //  Need to do the following POW
         //  - Needs to sha256 once
         uint256 first_hash = pblock->GetSHA256();
-        //  - Needs to sha256 twice
-        uint256 second_hash = (HashWriter{} << first_hash).GetSHA256();
-        //  - utilizing the first_hash and second sha256 hash. XOR and construct the graph.
-        uint256 graph_construction_hash = first_hash ^ second_hash;
+        uint256 graph_construction_hash = first_hash;
+        if(legacy_miner) {
+            //  - Needs to sha256 twice
+            uint256 second_hash = (HashWriter{} << first_hash).GetSHA256();
+            //  - utilizing the first_hash and second sha256 hash. XOR and construct the graph.
+            graph_construction_hash = first_hash ^ second_hash;
+        }
+        
         //  - Find a hamiltonian cycle
         HCGraphUtil util{};
         std::array<uint16_t, GRAPH_SIZE> vdf_solution;
@@ -128,17 +133,16 @@ bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, Cha
         if(vdf_possible.empty()) {
             continue;
         }
-
-        std::copy_n(vdf_possible.begin(), std::min(vdf_possible.size(), vdf_solution.size()), vdf_solution.begin());
-
-        uint256 gold_hash = (HashWriter{} << vdf_solution).GetSHA256();
         
+        std::copy_n(vdf_possible.begin(), std::min(vdf_possible.size(), vdf_solution.size()), vdf_solution.begin());
+        pblock->vdfSolution = vdf_solution;
+
+        uint256 gold_hash = pblock->GetHash();
+
         total_hashes++;
 
         if (UintToArith256(gold_hash) <= arith_uint256().SetCompact(pblock->nBits)) {
-            pblock->vdfSolution = vdf_solution;
-
-            *phash = pblock->GetHash();
+            *phash = gold_hash;
 
             if(make_genesis) {
                 std::cout << "Found gold: " << nNonce << std::endl;
@@ -224,7 +228,6 @@ void static ShaicoinMiner(const CChainParams& chainparams,
             //CBlock* pblock = &genesis;
             CBlock* pblock = &pblocktemplate->block;
             pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
-
             //
             // Search
             //

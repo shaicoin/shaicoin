@@ -19,7 +19,9 @@ class uint256;
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params&);
 
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
-bool CheckProofOfWork(uint256 first_sha_hash,
+bool CheckProofOfWork(int nTime,
+                      uint256 first_sha_hash,
+                      uint256 block_sha_hash,
                       unsigned int nBits,
                       const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
                       const Consensus::Params& params);
