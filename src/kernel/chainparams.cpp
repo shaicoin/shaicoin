@@ -105,8 +105,8 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = 1628640000; // August 11th, 2021
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 0; // Approximately November 12th, 2021
 
-        consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000000000029e542b");
-        consensus.defaultAssumeValid = uint256S("0x0018b0a66e8050d3d762b6322e6f082299a819e1af46a4fdad6632ef60038496");
+        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000003729cc2");
+        consensus.defaultAssumeValid = uint256S("0x00028e3e904613b234a753bf3cb4d7d94bb1953d26b88a3163ba0995d0949a6c");
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -154,7 +154,8 @@ public:
             {
                 { 0, uint256S("0x0019592cd5c0ef222adcaa85d4000602636a05e57b3541a844a90644815cacbb") },
                 { 2180, uint256S("0x00055e4e77d39cc2e0600eebdc773162824fb8d42359879b4916e1adcb0bf4f9") },
-                { 4349, uint256S("0x0018b0a66e8050d3d762b6322e6f082299a819e1af46a4fdad6632ef60038496") }
+                { 4349, uint256S("0x0018b0a66e8050d3d762b6322e6f082299a819e1af46a4fdad6632ef60038496") },
+                { 5233, uint256S("0x00028e3e904613b234a753bf3cb4d7d94bb1953d26b88a3163ba0995d0949a6c") }
             }
         };
 
