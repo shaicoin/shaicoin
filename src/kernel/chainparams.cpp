@@ -105,8 +105,8 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = 1628640000; // August 11th, 2021
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 0; // Approximately November 12th, 2021
 
-        consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000000000000001154bbd6");
-        consensus.defaultAssumeValid = uint256S("0x00002bbc0dbc432aca83a602d3309ee90cdf552bb1ff6b14274bdc2f8fec8862");
+        consensus.nMinimumChainWork = uint256S("0x0000000000000000000000000000000000000000000000000000000013bb3995");
+        consensus.defaultAssumeValid = uint256S("0x00009bee1326c7a31769f9f5b14c737906113fbe11dc152d1026fbbe72ba686d");
 
         /**
          * The message start string is designed to be unlikely to occur in normal data.
@@ -156,7 +156,7 @@ public:
                 { 2180, uint256S("0x00055e4e77d39cc2e0600eebdc773162824fb8d42359879b4916e1adcb0bf4f9") },
                 { 4349, uint256S("0x0018b0a66e8050d3d762b6322e6f082299a819e1af46a4fdad6632ef60038496") },
                 { 5233, uint256S("0x00028e3e904613b234a753bf3cb4d7d94bb1953d26b88a3163ba0995d0949a6c") },
-                { 9057, uint256S("0x00002bbc0dbc432aca83a602d3309ee90cdf552bb1ff6b14274bdc2f8fec8862") }
+                { 9597, uint256S("0x00009bee1326c7a31769f9f5b14c737906113fbe11dc152d1026fbbe72ba686d") }
             }
         };
 
@@ -191,7 +191,7 @@ public:
         consensus.BIP66Height = 0; // 000000002104c8c45e99a8853285a3b592602a3ccde2b832481da85e9e4ba182
         consensus.CSVHeight = 0; // 00000000025e930139bac5c6c31a403776da130831ab85be56578f3fa75369bb
         consensus.SegwitHeight = 0; // 00000000002b980fcd729daaa248fd9316a5200e9b367f4ff2c42453e84201ca
-        consensus.MinBIP9WarningHeight = 0; // segwit activation height + miner confirmation window
+        consensus.MinBIP9WarningHeight = 24; // segwit activation height + miner confirmation window
         consensus.powLimit = uint256S("0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
         consensus.nPowTargetTimespan = 2 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 5 * 60;

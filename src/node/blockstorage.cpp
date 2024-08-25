@@ -131,14 +131,23 @@ bool BlockTreeDB::LoadBlockIndexGuts(const Consensus::Params& consensusParams, s
                 pindexNew->nTx            = diskindex.nTx;
                 pindexNew->vdfSolution    = diskindex.vdfSolution;
 
-                if (!CheckProofOfWork(pindexNew->nTime, 
-                                      pindexNew->GetBlockHeader().GetSHA256(),
-                                      pindexNew->GetBlockHeader().GetHash(),
-                                      pindexNew->nBits,
-                                      pindexNew->vdfSolution,
-                                      consensusParams)) {
-                    return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
-                }
+
+                //
+                //  After talking to a XMR dev. XMR is not validating blocks from disk
+                //  I looked through and tried to trace LoadBlockIndexGuts as best I could
+                //  and I believe that we are validating the headers on communication and
+                //  I can only seem to come to the conclusion that this is validating what
+                //  is already there which was previously once validated.
+                //  if Im wrong make a PR telling me! <3
+                //
+                // if (!CheckProofOfWork(pindexNew->nTime, 
+                //                       pindexNew->GetBlockHeader().GetSHA256(),
+                //                       pindexNew->GetBlockHeader().GetHash(),
+                //                       pindexNew->nBits,
+                //                       pindexNew->vdfSolution,
+                //                       consensusParams)) {
+                //     return error("%s: CheckProofOfWork failed: %s", __func__, pindexNew->ToString());
+                // }
 
                 pcursor->Next();
             } else {

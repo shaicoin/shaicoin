@@ -1697,11 +1697,16 @@ CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consensusParams) {
 
     //
     // For the rare reader who actually reads code
-    // when I modified bitcoin GetNextWorkRequired (similar to what dogecoin did)
-    // Shaicoin realized a bug that existed deep within the codebase of bitcoin
-    // and I have reason to believe it still exists on dogecoin today
-    // upon fixing the bug we needed to relaunch and payback everyone who originally mined
-    // plus use as incentive for community dev tasks that need to occur
+    // when I initially launched this project I had a
+    // set of assumptions that was incorrect and I made a mistake
+    // where the hash space of the block was very tiny such that collisions
+    // were introduced which caused problems.
+    //
+    // However, with the help of the community testing and giving me feedback
+    // I was able to realize the issue and I corrected it with a relaunch. 
+    // However, I had to pay them back for what they mined and also create a
+    // community wallet that I can utilize to help grow and incentivize the community
+    //
     if(nHeight == 1) {
         return 420690 * COIN;
     }
