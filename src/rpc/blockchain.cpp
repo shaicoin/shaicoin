@@ -21,12 +21,14 @@
 #include <index/blockfilterindex.h>
 #include <index/coinstatsindex.h>
 #include <kernel/coinstats.h>
+#include <key_io.h>
 #include <logging/timer.h>
 #include <net.h>
 #include <net_processing.h>
 #include <node/blockstorage.h>
 #include <node/context.h>
 #include <node/transaction.h>
+#include <node/miner.h>
 #include <node/utxo_snapshot.h>
 #include <primitives/transaction.h>
 #include <rpc/server.h>
@@ -60,6 +62,8 @@ using kernel::CoinStatsHashType;
 using node::BlockManager;
 using node::NodeContext;
 using node::SnapshotMetadata;
+using node::CBlockTemplate;
+using node::BlockAssembler;
 
 struct CUpdatedBlock
 {
@@ -638,6 +642,71 @@ const RPCResult getblock_vin{
         }},
     }
 };
+
+static RPCHelpMan getnewblockraw()
+{
+    return RPCHelpMan{"getnewblockraw",
+                "\nReturns a new, serialized, hex-encoded block that can be mined along with network difficulty in nbits and expanded hex format.\n",
+                {
+                    {"mineraddress", RPCArg::Type::STR, RPCArg::Optional::NO, "The miner's address"},
+                },
+                {
+                    RPCResult{"for verbosity = 0",
+                    RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::STR_HEX, "blockhex", "Serialized, hex-encoded data for the new block"},
+                        {RPCResult::Type::NUM, "difficulty_nbits", "The current network difficulty in nbits format"},
+                        {RPCResult::Type::STR_HEX, "difficulty_expanded", "The current network difficulty in expanded hex format"},
+                    }},
+                },
+                RPCExamples{
+                    HelpExampleCli("getnewblockraw", "\"minerAddress\"")
+                    + HelpExampleRpc("getnewblockraw", "\"minerAddress\"")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    ChainstateManager& chainman = EnsureAnyChainman(request.context);
+
+    NodeContext& node = EnsureAnyNodeContext(request.context);
+    const CTxMemPool& mempool = EnsureMemPool(node);
+
+    std::string minerAddress = request.params[0].get_str();
+
+    CTxDestination dest = DecodeDestination(minerAddress);
+    if (!IsValidDestination(dest)) {
+        throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid miner address");
+    }
+
+    // Create the script for mining (i.e., the coinbase output script)
+    CScript coinbaseScript = GetScriptForDestination(dest);
+
+    // Create a new block template with the provided miner address
+    std::unique_ptr<CBlockTemplate> pblocktemplate = BlockAssembler{chainman.ActiveChainstate(), &mempool}.CreateNewBlock(coinbaseScript);
+    if (!pblocktemplate) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Failed to create new block");
+    }
+
+    // Serialize the block
+    const CBlock& block = pblocktemplate->block;
+    DataStream ssBlock;
+    ssBlock << TX_WITH_WITNESS(block);
+    std::string strHex = HexStr(ssBlock);
+
+    // Get the current network difficulty (nbits) and expand it to hex
+    uint32_t nBits = block.nBits;
+    arith_uint256 difficultyExpanded;
+    difficultyExpanded.SetCompact(nBits);
+
+    UniValue result(UniValue::VOBJ);
+    result.pushKV("blockhex", strHex);
+    result.pushKV("nbits", strprintf("%08x", nBits));
+    result.pushKV("expanded", difficultyExpanded.GetHex());
+
+    return result;
+},
+    };
+}
+
 
 static RPCHelpMan getblock()
 {
@@ -2854,6 +2923,7 @@ void RegisterBlockchainRPCCommands(CRPCTable& t)
         {"blockchain", &getblockstats},
         {"blockchain", &getbestblockhash},
         {"blockchain", &getblockcount},
+        {"blockchain", &getnewblockraw},
         {"blockchain", &getblock},
         {"blockchain", &getblockfrompeer},
         {"blockchain", &getblockhash},
