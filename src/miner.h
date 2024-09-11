@@ -137,7 +137,7 @@ class HCGraphUtil {
         auto currentTime = Clock::now();
         auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime).count();
         
-        if (elapsed > 3000) { // if we have longer than 3 seconds bail
+        if (elapsed > 1000) { // if we have longer than 1 seconds bail
             return false;
         }
 
