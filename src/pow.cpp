@@ -183,6 +183,34 @@ bool CheckProofOfWork_V2(uint256 first_sha_hash,
     return util.verifyHamiltonianCycle(graph, vdfSolution);
 }
 
+bool CheckProofOfWork_V3(uint256 first_sha_hash,
+                         uint256 block_sha_hash,
+                         unsigned int nBits,
+                         const std::array<uint16_t, GRAPH_SIZE>& vdfSolution,
+                         const Consensus::Params& params) {
+    bool fNegative;
+    bool fOverflow;
+    arith_uint256 bnTarget;
+
+    bnTarget.SetCompact(nBits, &fNegative, &fOverflow);
+
+    // Check range
+    if (fNegative || bnTarget == 0 || fOverflow || bnTarget > UintToArith256(params.powLimit)) {
+        return false;
+    }
+
+    if (UintToArith256(block_sha_hash) > bnTarget) {
+        return false;
+    }
+
+    // construct VDF Graph
+    HCGraphUtil util{};
+    size_t grid_size = util.getGridSize_V2(first_sha_hash.ToString());
+    std::vector<std::vector<bool>> graph = util.generateGraph_V2(first_sha_hash, grid_size);
+    // verify the vdf solution
+    return util.verifyHamiltonianCycle(graph, vdfSolution);
+}
+
 bool CheckProofOfWork(int nTime,
                       uint256 first_sha_hash,
                       uint256 block_sha_hash,
@@ -191,6 +219,8 @@ bool CheckProofOfWork(int nTime,
                       const Consensus::Params& params) {
     if(nTime <= 1723869065) {
         return CheckProofOfWork_V1(first_sha_hash, nBits, vdfSolution, params);
+    } else if(nTime <= 1726799420) {
+        return CheckProofOfWork_V2(first_sha_hash, block_sha_hash, nBits, vdfSolution, params);
     }
-    return CheckProofOfWork_V2(first_sha_hash, block_sha_hash, nBits, vdfSolution, params);
+    return CheckProofOfWork_V3(first_sha_hash, block_sha_hash, nBits, vdfSolution, params);
 }

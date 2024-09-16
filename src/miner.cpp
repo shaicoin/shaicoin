@@ -127,7 +127,13 @@ bool static ScanHash(CBlockHeader *pblock, uint32_t& nNonce, uint256 *phash, Cha
         std::array<uint16_t, GRAPH_SIZE> vdf_solution;
         vdf_solution.fill(USHRT_MAX);
 
-        std::vector<uint16_t> vdf_possible = util.findHamiltonianCycle(graph_construction_hash);
+        std::vector<uint16_t> vdf_possible;
+        
+        if(pblock->nTime <= 1726799420) {
+            vdf_possible = util.findHamiltonianCycle(graph_construction_hash);
+        } else {
+            vdf_possible = util.findHamiltonianCycle_V2(graph_construction_hash);
+        }
 
         // Check for empty
         if(vdf_possible.empty()) {

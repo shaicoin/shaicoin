@@ -10,6 +10,7 @@
 #include <validation.h>
 #include <stdint.h>
 #include <net.h>
+#include <random>
 
 using Clock = std::chrono::high_resolution_clock;
 
@@ -32,6 +33,11 @@ class HCGraphUtil {
         ss << std::hex << hexString;
         ss >> number;
         return number;
+    }
+
+    uint64_t extractSeedFromHash(const uint256& hash)
+    {
+        return hash.GetUint64(0);
     }
 
     public: 
@@ -90,6 +96,19 @@ class HCGraphUtil {
         return normalizedGridSize;
     }
 
+    uint16_t getGridSize_V2(const std::string& hash)
+    {
+        int min_grid_size = 2000;
+        int max_grid_size = GRAPH_SIZE;
+        std::string grid_size_segment = hash.substr(0, 8);
+        unsigned long long grid_size = hexToType<unsigned long long>(grid_size_segment);
+        auto grid_size_final = min_grid_size + (grid_size % (max_grid_size - min_grid_size));
+        if(grid_size_final > GRAPH_SIZE) {
+            grid_size_final = GRAPH_SIZE;
+        }
+        return grid_size_final;
+    }
+
     std::vector<std::vector<bool>> generateGraph(const uint256& hash,
                                                  uint16_t gridSize)
     {
@@ -107,6 +126,44 @@ class HCGraphUtil {
                 if (edgeValue < 128) {
                     graph[i][j] = graph[j][i] = true;
                 }
+            }
+        }
+        return graph;
+    }
+
+    std::vector<std::vector<bool>> generateGraph_V2(const uint256& hash,
+                                                 uint16_t gridSize)
+    {
+        std::vector<std::vector<bool>> graph(gridSize, std::vector<bool>(gridSize, false));
+        size_t numEdges = (gridSize * (gridSize - 1)) / 2;
+        size_t bitsNeeded = numEdges; // One bit per edge
+
+        // Extract seed from hash
+        uint64_t seed = extractSeedFromHash(hash);
+
+        // Initialize PRNG with seed
+        std::mt19937_64 prng;
+        prng.seed(seed);
+
+        // Generate bitsNeeded bits
+        std::vector<bool> bitStream;
+        bitStream.reserve(bitsNeeded);
+
+        for (size_t i = 0; i < bitsNeeded; ++i) {
+            uint32_t randomBits = prng();
+            // Extract bits from randomBits
+            for (int j = 31; j >= 0 && bitStream.size() < bitsNeeded; --j) {
+                bool bit = (randomBits >> j) & 1;
+                bitStream.push_back(bit);
+            }
+        }
+
+        // Fill the adjacency matrix
+        size_t bitIndex = 0;
+        for (size_t i = 0; i < gridSize; ++i) {
+            for (size_t j = i + 1; j < gridSize; ++j) {
+                bool edgeExists = bitStream[bitIndex++];
+                graph[i][j] = graph[j][i] = edgeExists;
             }
         }
         return graph;
@@ -175,7 +232,20 @@ class HCGraphUtil {
         if (!hamiltonianCycleUtil(graph, path, 1)) {
             return {};
         }
-        // hmm we are returning -1 in path potentially
+        return path;
+    }
+
+    std::vector<uint16_t> findHamiltonianCycle_V2(uint256 graph_hash)
+    {
+        std::vector<std::vector<bool>> graph = generateGraph_V2(graph_hash, getGridSize_V2(graph_hash.ToString()));
+        std::vector<uint16_t> path(graph.size(), -1);
+
+        path[0] = 0;
+        startTime = Clock::now();
+
+        if (!hamiltonianCycleUtil(graph, path, 1)) {
+            return {};
+        }
         return path;
     }
 };
