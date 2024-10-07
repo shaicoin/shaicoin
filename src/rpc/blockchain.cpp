@@ -13,6 +13,7 @@
 #include <common/args.h>
 #include <consensus/amount.h>
 #include <consensus/params.h>
+#include "consensus/merkle.h"
 #include <consensus/validation.h>
 #include <core_io.h>
 #include <deploymentinfo.h>
@@ -671,7 +672,6 @@ static RPCHelpMan getnewblockraw()
     const CTxMemPool& mempool = EnsureMemPool(node);
 
     std::string minerAddress = request.params[0].get_str();
-
     CTxDestination dest = DecodeDestination(minerAddress);
     if (!IsValidDestination(dest)) {
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "Invalid miner address");
@@ -687,13 +687,15 @@ static RPCHelpMan getnewblockraw()
     }
 
     // Serialize the block
-    const CBlock& block = pblocktemplate->block;
+    CBlock* block = &pblocktemplate->block;
+    block->hashMerkleRoot = BlockMerkleRoot(*block);
+    
     DataStream ssBlock;
-    ssBlock << TX_WITH_WITNESS(block);
+    ssBlock << TX_WITH_WITNESS(*block);
     std::string strHex = HexStr(ssBlock);
 
     // Get the current network difficulty (nbits) and expand it to hex
-    uint32_t nBits = block.nBits;
+    uint32_t nBits = block->nBits;
     arith_uint256 difficultyExpanded;
     difficultyExpanded.SetCompact(nBits);
 
