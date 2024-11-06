@@ -78,6 +78,46 @@ class HCGraphUtil {
         return true;
     }
 
+    bool static verifyHamiltonianCycle_V2(const std::vector<std::vector<bool>>& graph,
+                                       const std::array<uint16_t, GRAPH_SIZE>& path)
+    {
+        // Ensure the first path is zero
+        if (path[0] != 0) {
+            return false;
+        }
+
+        size_t path_size = 0;
+        auto it = std::find(path.begin(), path.end(), USHRT_MAX);
+        if (it != path.end()) {
+            path_size = std::distance(path.begin(), it);
+        }
+
+        size_t n = graph.size();
+
+        // Check if path contains all vertices exactly once
+        if (path_size != n) {
+            return false;
+        }
+        std::unordered_set<uint16_t> verticesInPath(path.begin(), path.begin() + path_size);
+        if (verticesInPath.size() != n) {
+            return false;
+        }
+
+        // Check if the path forms a cycle
+        for (size_t i = 1; i < n; ++i) {
+            if (!graph[path[i - 1]][path[i]]) {
+                return false;
+            }
+        }
+
+        // Check if there's an edge from the last to the first vertex to form a cycle
+        if (!graph[path[n - 1]][path[0]]) {
+            return false;
+        }
+        
+        return true;
+    }
+
     uint16_t getGridSize(const std::string& hash)
     {
         int minGridSize = 512;

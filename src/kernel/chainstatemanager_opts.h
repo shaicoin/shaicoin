@@ -20,7 +20,7 @@
 class CChainParams;
 
 static constexpr bool DEFAULT_CHECKPOINTS_ENABLED{true};
-static constexpr auto DEFAULT_MAX_TIP_AGE{24h};
+static constexpr auto DEFAULT_MAX_TIP_AGE{240h}; // 2000x reduction in theory might stall chain for a bit
 
 namespace kernel {
 
