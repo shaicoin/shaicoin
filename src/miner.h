@@ -50,7 +50,17 @@ class HCGraphUtil {
         auto it = std::find(path.begin(), path.end(), USHRT_MAX);
         if (it != path.end()) {
             path_size = std::distance(path.begin(), it);
+
+            bool all_ushrt_max = std::all_of(it, path.end(), [](uint16_t val) {
+                return val == USHRT_MAX;
+            });
+            
+            if(!all_ushrt_max) {
+                return false;
+            }
         }
+        
+       
 
         size_t n = graph.size();
 
