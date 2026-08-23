@@ -20,9 +20,16 @@ class CFeeRate;
 class CScript;
 
 /** Default for -blockmaxweight, which controls the range of block weights the mining code will create **/
-static constexpr unsigned int DEFAULT_BLOCK_MAX_WEIGHT{MAX_BLOCK_WEIGHT - 4000};
+static constexpr unsigned int DEFAULT_BLOCK_MAX_WEIGHT{MAX_BLOCK_WEIGHT};
+/** Default for -blockreservedweight **/
+static constexpr unsigned int DEFAULT_BLOCK_RESERVED_WEIGHT{8000};
+/** This accounts for the block header, var_int encoding of the transaction count and a minimally viable
+ * coinbase transaction. It adds an additional safety margin, because even with a thorough understanding
+ * of block serialization, it's easy to make a costly mistake when trying to squeeze every last byte.
+ * Setting a lower value is prevented at startup. */
+static constexpr unsigned int MINIMUM_BLOCK_RESERVED_WEIGHT{2000};
 /** Default for -blockmintxfee, which sets the minimum feerate for a transaction in blocks created by mining code **/
-static constexpr unsigned int DEFAULT_BLOCK_MIN_TX_FEE{1000};
+static constexpr unsigned int DEFAULT_BLOCK_MIN_TX_FEE{1};
 /** The maximum weight for transactions we're willing to relay/mine */
 static constexpr int32_t MAX_STANDARD_TX_WEIGHT{400000};
 /** The minimum non-witness size for transactions we're willing to relay/mine: one larger than 64  */
@@ -31,8 +38,10 @@ static constexpr unsigned int MIN_STANDARD_TX_NONWITNESS_SIZE{65};
 static constexpr unsigned int MAX_P2SH_SIGOPS{15};
 /** The maximum number of sigops we're willing to relay/mine in a single tx */
 static constexpr unsigned int MAX_STANDARD_TX_SIGOPS_COST{MAX_BLOCK_SIGOPS_COST/5};
+/** The maximum number of potentially executed legacy signature operations in a single standard tx */
+static constexpr unsigned int MAX_TX_LEGACY_SIGOPS{2'500};
 /** Default for -incrementalrelayfee, which sets the minimum feerate increase for mempool limiting or replacement **/
-static constexpr unsigned int DEFAULT_INCREMENTAL_RELAY_FEE{1000};
+static constexpr unsigned int DEFAULT_INCREMENTAL_RELAY_FEE{100};
 /** Default for -bytespersigop */
 static constexpr unsigned int DEFAULT_BYTES_PER_SIGOP{20};
 /** Default for -permitbaremultisig */
@@ -54,7 +63,7 @@ static constexpr unsigned int MAX_STANDARD_SCRIPTSIG_SIZE{1650};
  * outputs below the new threshold */
 static constexpr unsigned int DUST_RELAY_TX_FEE{3000};
 /** Default for -minrelaytxfee, minimum relay fee for transactions */
-static constexpr unsigned int DEFAULT_MIN_RELAY_TX_FEE{1000};
+static constexpr unsigned int DEFAULT_MIN_RELAY_TX_FEE{100};
 /** Default for -limitancestorcount, max number of in-mempool ancestors */
 static constexpr unsigned int DEFAULT_ANCESTOR_LIMIT{25};
 /** Default for -limitancestorsize, maximum kilobytes of tx + all in-mempool ancestors */
@@ -77,6 +86,10 @@ static const unsigned int MAX_OP_RETURN_RELAY = 83;
  */
 static constexpr unsigned int EXTRA_DESCENDANT_TX_SIZE_LIMIT{10000};
 
+/**
+ * Maximum number of ephemeral dust outputs allowed.
+ */
+static constexpr unsigned int MAX_DUST_OUTPUTS_PER_TX{1};
 
 /**
  * Mandatory script verification flags that all new transactions must comply with for
@@ -127,6 +140,8 @@ bool IsDust(const CTxOut& txout, const CFeeRate& dustRelayFee);
 
 bool IsStandard(const CScript& scriptPubKey, const std::optional<unsigned>& max_datacarrier_bytes, TxoutType& whichType);
 
+/** Get the vout index numbers of all dust outputs */
+std::vector<uint32_t> GetDust(const CTransaction& tx, CFeeRate dust_relay_rate);
 
 // Changing the default transaction version requires a two step process: first
 // adapting relay policy by bumping TX_MAX_STANDARD_VERSION, and then later

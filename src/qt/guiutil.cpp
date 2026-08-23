@@ -2,8 +2,6 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
-
 #include <qt/guiutil.h>
 
 #include <qt/bitcoinaddressvalidator.h>
@@ -117,6 +115,7 @@ static std::string DummyAddress(const CChainParams &params)
         break;
     case ChainType::SIGNET:
     case ChainType::TESTNET:
+    case ChainType::TESTNET4:
         addr = "tb1p35yvjel7srp783ztf8v6jdra7dhfzk5jaun8xz2qp6ws7z80n4tqa6qnlg";
         break;
     case ChainType::REGTEST:
@@ -136,7 +135,7 @@ void setupAddressWidget(QValidatedLineEdit *widget, QWidget *parent)
     widget->setFont(fixedPitchFont());
     // We don't want translators to use own addresses in translations
     // and this is the only place, where this address is supplied.
-    widget->setPlaceholderText(QObject::tr("Enter a Bitcoin address (e.g. %1)").arg(
+    widget->setPlaceholderText(QObject::tr("Enter a Shaicoin address (e.g. %1)").arg(
         QString::fromStdString(DummyAddress(Params()))));
     widget->setValidator(new BitcoinAddressEntryValidator(parent));
     widget->setCheckValidator(new BitcoinAddressCheckValidator(parent));
@@ -150,7 +149,7 @@ void AddButtonShortcut(QAbstractButton* button, const QKeySequence& shortcut)
 bool parseBitcoinURI(const QUrl &uri, SendCoinsRecipient *out)
 {
     // return if URI is not valid or is no bitcoin: URI
-    if(!uri.isValid() || uri.scheme() != QString("bitcoin"))
+    if(!uri.isValid() || uri.scheme() != QString("shaicoin"))
         return false;
 
     SendCoinsRecipient rv;
@@ -213,7 +212,7 @@ QString formatBitcoinURI(const SendCoinsRecipient &info)
 {
     bool bech_32 = info.address.startsWith(QString::fromStdString(Params().Bech32HRP() + "1"));
 
-    QString ret = QString("bitcoin:%1").arg(bech_32 ? info.address.toUpper() : info.address);
+    QString ret = QString("shaicoin:%1").arg(bech_32 ? info.address.toUpper() : info.address);
     int paramCount = 0;
 
     if (info.amount)
@@ -406,19 +405,26 @@ bool isObscured(QWidget *w)
 
 void bringToFront(QWidget* w)
 {
-#ifdef Q_OS_MACOS
-    ForceActivation();
-#endif
-
     if (w) {
-        // activateWindow() (sometimes) helps with keyboard focus on Windows
-        if (w->isMinimized()) {
-            w->showNormal();
-        } else {
+        if (QGuiApplication::platformName() == "wayland") {
+            auto flags = w->windowFlags();
+            w->setWindowFlags(flags|Qt::WindowStaysOnTopHint);
             w->show();
+            w->setWindowFlags(flags);
+            w->show();
+        } else {
+#ifdef Q_OS_MACOS
+            ForceActivation();
+#endif
+            // activateWindow() (sometimes) helps with keyboard focus on Windows
+            if (w->isMinimized()) {
+                w->showNormal();
+            } else {
+                w->show();
+            }
+            w->activateWindow();
+            w->raise();
         }
-        w->activateWindow();
-        w->raise();
     }
 }
 
@@ -918,29 +924,24 @@ void LogQtInfo()
 #else
     const std::string qt_link{"dynamic"};
 #endif
-#ifdef QT_STATICPLUGIN
-    const std::string plugin_link{"static"};
-#else
-    const std::string plugin_link{"dynamic"};
-#endif
-    LogPrintf("Qt %s (%s), plugin=%s (%s)\n", qVersion(), qt_link, QGuiApplication::platformName().toStdString(), plugin_link);
+    LogInfo("Qt %s (%s), plugin=%s\n", qVersion(), qt_link, QGuiApplication::platformName().toStdString());
     const auto static_plugins = QPluginLoader::staticPlugins();
     if (static_plugins.empty()) {
-        LogPrintf("No static plugins.\n");
+        LogInfo("No static plugins.\n");
     } else {
-        LogPrintf("Static plugins:\n");
+        LogInfo("Static plugins:\n");
         for (const QStaticPlugin& p : static_plugins) {
             QJsonObject meta_data = p.metaData();
             const std::string plugin_class = meta_data.take(QString("className")).toString().toStdString();
             const int plugin_version = meta_data.take(QString("version")).toInt();
-            LogPrintf(" %s, version %d\n", plugin_class, plugin_version);
+            LogInfo(" %s, version %d\n", plugin_class, plugin_version);
         }
     }
 
-    LogPrintf("Style: %s / %s\n", QApplication::style()->objectName().toStdString(), QApplication::style()->metaObject()->className());
-    LogPrintf("System: %s, %s\n", QSysInfo::prettyProductName().toStdString(), QSysInfo::buildAbi().toStdString());
+    LogInfo("Style: %s / %s\n", QApplication::style()->objectName().toStdString(), QApplication::style()->metaObject()->className());
+    LogInfo("System: %s, %s\n", QSysInfo::prettyProductName().toStdString(), QSysInfo::buildAbi().toStdString());
     for (const QScreen* s : QGuiApplication::screens()) {
-        LogPrintf("Screen: %s %dx%d, pixel ratio=%.1f\n", s->name().toStdString(), s->size().width(), s->size().height(), s->devicePixelRatio());
+        LogInfo("Screen: %s %dx%d, pixel ratio=%.1f\n", s->name().toStdString(), s->size().width(), s->size().height(), s->devicePixelRatio());
     }
 }
 
@@ -1007,4 +1008,13 @@ void ShowModalDialogAsynchronously(QDialog* dialog)
     dialog->show();
 }
 
+QString WalletDisplayName(const QString& name)
+{
+    return name.isEmpty() ? "[" + QObject::tr("default wallet") + "]" : name;
+}
+
+QString WalletDisplayName(const std::string& name)
+{
+    return WalletDisplayName(QString::fromStdString(name));
+}
 } // namespace GUIUtil

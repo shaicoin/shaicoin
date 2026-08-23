@@ -71,9 +71,14 @@ struct BIP9Deployment {
 /**
  * Parameters that influence chain consensus.
  */
+static constexpr int RANDOMX_KEY_INTERVAL = 2048;
+static constexpr int RANDOMX_KEY_DELAY = 64;
+static constexpr size_t RANDOMX_KEY_MAX_BYTES = 60;
+
 struct Params {
     uint256 hashGenesisBlock;
-    int nSubsidyHalvingInterval;
+    int tailEmissionBlockHeight;
+    uint32_t nRandomXV2Time {1788248888};
     /**
      * Hashes of blocks that
      * - are known to be consensus valid, and
@@ -108,6 +113,11 @@ struct Params {
     /** Proof of work parameters */
     uint256 powLimit;
     bool fPowAllowMinDifficultyBlocks;
+    /**
+      * Enforce BIP94 timewarp attack mitigation. On testnet4 this also enforces
+      * the block storm mitigation.
+      */
+    bool enforce_BIP94;
     bool fPowNoRetargeting;
     int64_t nPowTargetSpacing;
     int64_t nPowTargetTimespan;

@@ -15,7 +15,7 @@
     </message>
     <message>
         <source>Copy the currently selected address to the system clipboard</source>
-        <translation type="unfinished">העתק את הכתובת המסומנת ללוח</translation>
+        <translation type="unfinished">העתקת הכתובת המסומנת ללוח</translation>
     </message>
     <message>
         <source>&amp;Copy</source>
@@ -182,6 +182,14 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <message>
         <source>Enter the old passphrase and new passphrase for the wallet.</source>
         <translation type="unfinished">נא לספק את הסיסמה הישנה ולתת סיסמה חדשה לארנק.</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished">המשך</translation>
+    </message>
+    <message>
+        <source>Back</source>
+        <translation type="unfinished">חזרה</translation>
     </message>
     <message>
         <source>Remember that encrypting your wallet cannot fully protect your bitcoins from being stolen by malware infecting your computer.</source>
@@ -397,6 +405,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <message>
         <source>%1 GB</source>
         <translation type="unfinished">%1 ג״ב</translation>
+    </message>
+    <message>
+        <source>default wallet</source>
+        <translation type="unfinished">ארנק בררת מחדל</translation>
     </message>
 </context>
 <context>
@@ -692,6 +704,14 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">סגירת כל הארנקים</translation>
     </message>
     <message>
+        <source>Migrate Wallet</source>
+        <translation type="unfinished">הסבת ארנק</translation>
+    </message>
+    <message>
+        <source>Migrate a wallet</source>
+        <translation type="unfinished">הסבת ארנק לביטקוין</translation>
+    </message>
+    <message>
         <source>Show the %1 help message to get a list with possible Bitcoin command-line options</source>
         <translation type="unfinished">יש להציג את הודעת העזרה של %1 כדי להציג רשימה עם אפשרויות שורת פקודה לביטקוין</translation>
     </message>
@@ -703,10 +723,6 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <source>Mask the values in the Overview tab</source>
         <translation type="unfinished">הסווה את הערכים בלשונית התיאור הכללי
 </translation>
-    </message>
-    <message>
-        <source>default wallet</source>
-        <translation type="unfinished">ארנק בררת מחדל</translation>
     </message>
     <message>
         <source>No wallets available</source>
@@ -791,6 +807,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <message>
         <source>Error: %1</source>
         <translation type="unfinished">שגיאה: %1</translation>
+    </message>
+    <message>
+        <source>Warning: %1</source>
+        <translation type="unfinished">אזהרה: %1</translation>
     </message>
     <message>
         <source>Date: %1
@@ -1008,6 +1028,13 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     </message>
     </context>
 <context>
+    <name>MigrateWalletActivity</name>
+    <message>
+        <source>Migrate Wallet</source>
+        <translation type="unfinished">הסבת ארנק</translation>
+    </message>
+    </context>
+<context>
     <name>OpenWalletActivity</name>
     <message>
         <source>Open wallet failed</source>
@@ -1016,10 +1043,6 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <message>
         <source>Open wallet warning</source>
         <translation type="unfinished">אזהרת פתיחת ארנק</translation>
-    </message>
-    <message>
-        <source>default wallet</source>
-        <translation type="unfinished">ארנק בררת מחדל</translation>
     </message>
     <message>
         <source>Open Wallet</source>
@@ -1468,14 +1491,6 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">עודף &amp;בלתי מאושר מההשקעה</translation>
     </message>
     <message>
-        <source>Automatically open the Bitcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation type="unfinished">פתיחת הפתחה של ביטקוין בנתב באופן אוטומטי. עובד רק אם UPnP מופעל ונתמך בנתב.</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation type="unfinished">מיפוי פתחה באמצעות UPnP</translation>
-    </message>
-    <message>
         <source>Accept connections from outside.</source>
         <translation type="unfinished">אשר חיבורים חיצוניים</translation>
     </message>
@@ -1595,6 +1610,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <source>The configuration file is used to specify advanced user options which override GUI settings. Additionally, any command-line options will override this configuration file.</source>
         <extracomment>Explanatory text about the priority order of instructions considered by client. The order from high to low being: command-line, configuration file, GUI settings.</extracomment>
         <translation type="unfinished">בקובץ ההגדרות ניתן לציין אפשרויות מתקדמות אשר יקבלו עדיפות על ההגדרות בממשק הגרפי. כמו כן, אפשרויות בשורת הפקודה יקבלו עדיפות על קובץ ההגדרות.</translation>
+    </message>
+    <message>
+        <source>Continue</source>
+        <translation type="unfinished">המשך</translation>
     </message>
     <message>
         <source>Cancel</source>
@@ -2156,6 +2175,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <message>
         <source>Network activity disabled</source>
         <translation type="unfinished">פעילות הרשת נוטרלה</translation>
+    </message>
+    <message>
+        <source>None</source>
+        <translation type="unfinished">ללא</translation>
     </message>
     <message>
         <source>Executing command without any wallet</source>
@@ -2721,10 +2744,6 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">חתימה על הו&amp;דעה</translation>
     </message>
     <message>
-        <source>You can sign messages/agreements with your addresses to prove you can receive bitcoins sent to them. Be careful not to sign anything vague or random, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
-        <translation type="unfinished">אפשר לחתום על הודעות/הסכמים באמצעות הכתובות שלך, כדי להוכיח שבאפשרותך לקבל את הביטקוינים הנשלחים אליהן. יש להיזהר ולא לחתום על תוכן עמום או אקראי, מכיוון שתקיפות דיוג עשויות לנסות לגנוב את זהותך. יש לחתום רק על הצהרות מפורטות שהנך מסכים/ה להן.</translation>
-    </message>
-    <message>
         <source>The Bitcoin address to sign the message with</source>
         <translation type="unfinished">כתובת הביטקוין איתה לחתום את ההודעה</translation>
     </message>
@@ -2807,10 +2826,6 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <message>
         <source>Please check the address and try again.</source>
         <translation type="unfinished">נא לבדוק את הכתובת ולנסות שוב.</translation>
-    </message>
-    <message>
-        <source>The entered address does not refer to a key.</source>
-        <translation type="unfinished">הכתובת שסיפקת לא מתייחסת למפתח.</translation>
     </message>
     <message>
         <source>Wallet unlock was cancelled.</source>
@@ -3327,11 +3342,7 @@ Go to File &gt; Open Wallet to load a wallet.
         <source>Could not commit transaction</source>
         <translation type="unfinished">שילוב העסקה נכשל</translation>
     </message>
-    <message>
-        <source>default wallet</source>
-        <translation type="unfinished">ארנק בררת מחדל</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>WalletView</name>
     <message>
@@ -3387,8 +3398,8 @@ Go to File &gt; Open Wallet to load a wallet.
         <translation type="unfinished">מופץ תחת רשיון התוכנה של MIT, ראה קובץ מלווה  %s או %s</translation>
     </message>
     <message>
-        <source>Please check that your computer's date and time are correct! If your clock is wrong, %s will not work properly.</source>
-        <translation type="unfinished">נא בדקו שהתאריך והשעה במחשב שלכם נכונים! אם השעון שלכם לא מסונכרן, %s לא יעבוד כהלכה.</translation>
+        <source>Please contribute if you find %s useful. Visit %s for further information about the software.</source>
+        <translation type="unfinished">נא לשקול לתרום אם %s שימושי בשבילך. יש לבקר ב־%s למידע נוסף על התוכנה.</translation>
     </message>
     <message>
         <source>Prune configured below the minimum of %d MiB.  Please use a higher number.</source>
@@ -3455,20 +3466,12 @@ Go to File &gt; Open Wallet to load a wallet.
         <translation type="unfinished">‎-maxmempool חייב להיות לפחות %d מ״ב</translation>
     </message>
     <message>
-        <source>A fatal internal error occurred, see debug.log for details</source>
-        <translation type="unfinished">שגיאה פטלית פנימית אירעה, לפירוט ראה את לוג הדיבאג.</translation>
-    </message>
-    <message>
         <source>Cannot resolve -%s address: '%s'</source>
         <translation type="unfinished">לא מצליח לפענח -%s כתובת: '%s'</translation>
     </message>
     <message>
         <source>Cannot set -peerblockfilters without -blockfilterindex.</source>
         <translation type="unfinished">לא מצליח להגדיר את  -peerblockfilters ללא-blockfilterindex.</translation>
-    </message>
-    <message>
-        <source>Cannot write to data directory '%s'; check permissions.</source>
-        <translation type="unfinished">לא ניתן לכתוב אל תיקיית הנתונים ‚%s’, נא לבדוק את ההרשאות.</translation>
     </message>
     <message>
         <source>Config setting for %s only applied on %s network when in [%s] section.</source>
@@ -3493,10 +3496,6 @@ Go to File &gt; Open Wallet to load a wallet.
     <message>
         <source>Disk space is too low!</source>
         <translation type="unfinished">אין מספיק מקום בכונן!</translation>
-    </message>
-    <message>
-        <source>Do you want to rebuild the block database now?</source>
-        <translation type="unfinished">האם לבנות מחדש את מסד נתוני המקטעים?</translation>
     </message>
     <message>
         <source>Done loading</source>
@@ -3601,10 +3600,6 @@ Go to File &gt; Open Wallet to load a wallet.
     <message>
         <source>Need to specify a port with -whitebind: '%s'</source>
         <translation type="unfinished">יש לציין פתחה עם ‎-whitebind:‏ '%s'</translation>
-    </message>
-    <message>
-        <source>Not enough file descriptors available.</source>
-        <translation type="unfinished">אין מספיק מידע על הקובץ</translation>
     </message>
     <message>
         <source>Prune cannot be configured with a negative value.</source>

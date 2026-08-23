@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2015-2022 The Bitcoin Core developers
+# Copyright (c) 2015-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 """Utilities for manipulating blocks and transactions."""
@@ -27,6 +27,7 @@ from .messages import (
     hash256,
     ser_uint256,
     tx_from_hex,
+    uint256_from_compact,
     uint256_from_str,
     WITNESS_SCALE_FACTOR,
 )
@@ -34,7 +35,7 @@ from .script import (
     CScript,
     CScriptNum,
     CScriptOp,
-    OP_1,
+    OP_0,
     OP_RETURN,
     OP_TRUE,
 )
@@ -48,6 +49,7 @@ from .util import assert_equal
 
 MAX_BLOCK_SIGOPS = 20000
 MAX_BLOCK_SIGOPS_WEIGHT = MAX_BLOCK_SIGOPS * WITNESS_SCALE_FACTOR
+MAX_STANDARD_TX_WEIGHT = 400000
 
 # Genesis block time (regtest)
 TIME_GENESIS_BLOCK = 1296688602
@@ -55,7 +57,7 @@ TIME_GENESIS_BLOCK = 1296688602
 MAX_FUTURE_BLOCK_TIME = 2 * 60 * 60
 
 # Coinbase transaction outputs can only be spent after this number of new blocks (network rule)
-COINBASE_MATURITY = 100
+COINBASE_MATURITY = 29
 
 # From BIP141
 WITNESS_COMMITMENT_HEADER = b"\xaa\x21\xa9\xed"
@@ -64,6 +66,25 @@ NORMAL_GBT_REQUEST_PARAMS = {"rules": ["segwit"]}
 VERSIONBITS_LAST_OLD_BLOCK_VERSION = 4
 MIN_BLOCKS_TO_KEEP = 288
 
+REGTEST_RETARGET_PERIOD = 150
+
+REGTEST_N_BITS = 0x207fffff  # difficulty retargeting is disabled in REGTEST chainparams"
+REGTEST_TARGET = 0x7fffff0000000000000000000000000000000000000000000000000000000000
+assert_equal(uint256_from_compact(REGTEST_N_BITS), REGTEST_TARGET)
+
+DIFF_1_N_BITS = 0x1d00ffff
+DIFF_1_TARGET = 0x00000000ffff0000000000000000000000000000000000000000000000000000
+assert_equal(uint256_from_compact(DIFF_1_N_BITS), DIFF_1_TARGET)
+
+DIFF_4_N_BITS = 0x1c3fffc0
+DIFF_4_TARGET = int(DIFF_1_TARGET / 4)
+assert_equal(uint256_from_compact(DIFF_4_N_BITS), DIFF_4_TARGET)
+
+def nbits_str(nbits):
+    return f"{nbits:08x}"
+
+def target_str(target):
+    return f"{target:064x}"
 
 def create_block(hashprev=None, coinbase=None, ntime=None, *, version=None, tmpl=None, txlist=None):
     """Create a block (with regtest difficulty)."""
@@ -73,10 +94,10 @@ def create_block(hashprev=None, coinbase=None, ntime=None, *, version=None, tmpl
     block.nVersion = version or tmpl.get('version') or VERSIONBITS_LAST_OLD_BLOCK_VERSION
     block.nTime = ntime or tmpl.get('curtime') or int(time.time() + 600)
     block.hashPrevBlock = hashprev or int(tmpl['previousblockhash'], 0x10)
-    if tmpl and not tmpl.get('bits') is None:
+    if tmpl and tmpl.get('bits') is not None:
         block.nBits = struct.unpack('>I', bytes.fromhex(tmpl['bits']))[0]
     else:
-        block.nBits = 0x207fffff  # difficulty retargeting is disabled in REGTEST chainparams
+        block.nBits = REGTEST_N_BITS
     if coinbase is None:
         coinbase = create_coinbase(height=tmpl['height'])
     block.vtx.append(coinbase)
@@ -117,12 +138,12 @@ def add_witness_commitment(block, nonce=0):
 def script_BIP34_coinbase_height(height):
     if height <= 16:
         res = CScriptOp.encode_op_n(height)
-        # Append dummy to increase scriptSig size above 2 (see bad-cb-length consensus rule)
-        return CScript([res, OP_1])
+        # Append dummy to increase scriptSig size to 2 (see bad-cb-length consensus rule)
+        return CScript([res, OP_0])
     return CScript([CScriptNum(height)])
 
 
-def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_script=None, fees=0, nValue=50):
+def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_script=None, fees=0, nValue=50, retarget_period=REGTEST_RETARGET_PERIOD):
     """Create a coinbase transaction.
 
     If pubkey is passed in, the coinbase output will be a P2PK output;
@@ -135,7 +156,7 @@ def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_scr
     coinbaseoutput = CTxOut()
     coinbaseoutput.nValue = nValue * COIN
     if nValue == 50:
-        halvings = int(height / 150)  # regtest
+        halvings = int(height / retarget_period)
         coinbaseoutput.nValue >>= halvings
         coinbaseoutput.nValue += fees
     if pubkey is not None:
@@ -153,16 +174,18 @@ def create_coinbase(height, pubkey=None, *, script_pubkey=None, extra_output_scr
     coinbase.calc_sha256()
     return coinbase
 
-def create_tx_with_script(prevtx, n, script_sig=b"", *, amount, script_pub_key=CScript()):
+def create_tx_with_script(prevtx, n, script_sig=b"", *, amount, output_script=None):
     """Return one-input, one-output transaction object
        spending the prevtx's n-th output with the given amount.
 
        Can optionally pass scriptPubKey and scriptSig, default is anyone-can-spend output.
     """
+    if output_script is None:
+        output_script = CScript()
     tx = CTransaction()
     assert n < len(prevtx.vout)
     tx.vin.append(CTxIn(COutPoint(prevtx.sha256, n), script_sig, SEQUENCE_FINAL))
-    tx.vout.append(CTxOut(amount, script_pub_key))
+    tx.vout.append(CTxOut(amount, output_script))
     tx.calc_sha256()
     return tx
 

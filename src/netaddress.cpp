@@ -245,14 +245,14 @@ bool CNetAddr::SetTor(const std::string& addr)
         Span<const uint8_t> input_checksum{input->data() + ADDR_TORV3_SIZE, torv3::CHECKSUM_LEN};
         Span<const uint8_t> input_version{input->data() + ADDR_TORV3_SIZE + torv3::CHECKSUM_LEN, sizeof(torv3::VERSION)};
 
-        if (input_version != torv3::VERSION) {
+        if (!std::ranges::equal(input_version, torv3::VERSION)) {
             return false;
         }
 
         uint8_t calculated_checksum[torv3::CHECKSUM_LEN];
         torv3::Checksum(input_pubkey, calculated_checksum);
 
-        if (input_checksum != calculated_checksum) {
+        if (!std::ranges::equal(input_checksum, calculated_checksum)) {
             return false;
         }
 
@@ -807,13 +807,15 @@ CService::CService(const struct sockaddr_in6 &addr) : CNetAddr(addr.sin6_addr, a
    assert(addr.sin6_family == AF_INET6);
 }
 
-bool CService::SetSockAddr(const struct sockaddr *paddr)
+bool CService::SetSockAddr(const struct sockaddr *paddr, socklen_t addrlen)
 {
     switch (paddr->sa_family) {
     case AF_INET:
+        if (addrlen != sizeof(struct sockaddr_in)) return false;
         *this = CService(*(const struct sockaddr_in*)paddr);
         return true;
     case AF_INET6:
+        if (addrlen != sizeof(struct sockaddr_in6)) return false;
         *this = CService(*(const struct sockaddr_in6*)paddr);
         return true;
     default:

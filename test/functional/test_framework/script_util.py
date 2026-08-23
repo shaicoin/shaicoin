@@ -8,6 +8,7 @@ import unittest
 from test_framework.script import (
     CScript,
     OP_0,
+    OP_1,
     OP_15,
     OP_16,
     OP_CHECKMULTISIG,
@@ -20,6 +21,12 @@ from test_framework.script import (
     hash160,
     sha256,
 )
+
+# Maximum number of potentially executed legacy signature operations in validating a transaction.
+MAX_STD_LEGACY_SIGOPS = 2_500
+
+# Maximum number of sigops per standard P2SH redeemScript.
+MAX_STD_P2SH_SIGOPS = 15
 
 # To prevent a "tx-size-small" policy rule error, a transaction has to have a
 # non-witness size of at least 65 bytes (MIN_STANDARD_TX_NONWITNESS_SIZE in
@@ -41,6 +48,8 @@ assert MIN_PADDING == 5
 # standardness checks
 DUMMY_MIN_OP_RETURN_SCRIPT = CScript([OP_RETURN] + ([OP_0] * (MIN_PADDING - 1)))
 assert len(DUMMY_MIN_OP_RETURN_SCRIPT) == MIN_PADDING
+
+PAY_TO_ANCHOR = CScript([OP_1, bytes.fromhex("4e73")])
 
 def key_to_p2pk_script(key):
     key = check_key(key)

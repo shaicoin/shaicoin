@@ -12,13 +12,13 @@ import random
 # Parameters:
 
 # Aim for still working fine at some point in the future. [datetime]
-TIME = datetime(2026, 10, 5)
+TIME = datetime(2027, 10, 6)
 
 # Expected block interval. [timedelta]
-BLOCK_INTERVAL = timedelta(seconds=600)
+BLOCK_INTERVAL = timedelta(seconds=300)
 
 # The number of headers corresponding to the minchainwork parameter. [headers]
-MINCHAINWORK_HEADERS = 804000
+MINCHAINWORK_HEADERS = 886157
 
 # Combined processing bandwidth from all attackers to one victim. [bit/s]
 # 6 Gbit/s is approximately the speed at which a single thread of a Ryzen 5950X CPU thread can hash
@@ -106,13 +106,13 @@ ASSUME_CONVEX = True
 # System properties:
 
 # Headers in the redownload buffer are stored without prevhash. [bits]
-COMPACT_HEADER_SIZE = 48 * 8
+COMPACT_HEADER_SIZE = 4064
 
 # How many bits a header uses in P2P protocol. [bits]
-NET_HEADER_SIZE = 81 * 8
+NET_HEADER_SIZE = 4097 * 8
 
 # How many headers are sent at once. [headers]
-HEADER_BATCH_COUNT = 2000
+HEADER_BATCH_COUNT = 40
 
 # Whether or not the offset of which blocks heights get checksummed is randomized.
 RANDOMIZE_OFFSET = True

@@ -3,7 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <core_io.h>
 #include <key_io.h>
@@ -68,7 +68,7 @@ static RPCHelpMan getwalletinfo()
                             {RPCResult::Type::NUM, "duration", "elapsed seconds since scan start"},
                             {RPCResult::Type::NUM, "progress", "scanning progress percentage [0.0, 1.0]"},
                         }, /*skip_type_check=*/true},
-                        {RPCResult::Type::BOOL, "descriptors", "whether this wallet uses descriptors for scriptPubKey management"},
+                        {RPCResult::Type::BOOL, "descriptors", "whether this wallet uses descriptors for output script management"},
                         {RPCResult::Type::BOOL, "external_signer", "whether this wallet is configured to use an external signer such as a hardware wallet"},
                         {RPCResult::Type::BOOL, "blank", "Whether this wallet intentionally does not contain any keys, scripts, or descriptors"},
                         {RPCResult::Type::NUM_TIME, "birthtime", /*optional=*/true, "The start time for blocks scanning. It could be modified by (re)importing any descriptor with an earlier timestamp."},
@@ -169,7 +169,7 @@ static RPCHelpMan listwalletdir()
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
     UniValue wallets(UniValue::VARR);
-    for (const auto& path : ListDatabases(GetWalletDir())) {
+    for (const auto& [path, _] : ListDatabases(GetWalletDir())) {
         UniValue wallet(UniValue::VOBJ);
         wallet.pushKV("name", path.utf8string());
         wallets.push_back(std::move(wallet));
@@ -220,7 +220,7 @@ static RPCHelpMan loadwallet()
                 "\nNote that all wallet command-line options used when starting bitcoind will be"
                 "\napplied to the new wallet.\n",
                 {
-                    {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "The wallet directory or .dat file."},
+                    {"filename", RPCArg::Type::STR, RPCArg::Optional::NO, "The path to the directory of the wallet to be loaded, either absolute or relative to the \"wallets\" directory. The \"wallets\" directory is set by the -walletdir option and defaults to the \"wallets\" folder within the data directory."},
                     {"load_on_startup", RPCArg::Type::BOOL, RPCArg::Optional::OMITTED, "Save wallet name to persistent settings and load on startup. True to add wallet to startup list, false to remove, null to leave unchanged."},
                 },
                 RPCResult{
@@ -234,8 +234,15 @@ static RPCHelpMan loadwallet()
                     }
                 },
                 RPCExamples{
-                    HelpExampleCli("loadwallet", "\"test.dat\"")
-            + HelpExampleRpc("loadwallet", "\"test.dat\"")
+                    "\nLoad wallet from the wallet dir:\n"
+                    + HelpExampleCli("loadwallet", "\"walletname\"")
+                    + HelpExampleRpc("loadwallet", "\"walletname\"")
+                    + "\nLoad wallet using absolute path (Unix):\n"
+                    + HelpExampleCli("loadwallet", "\"/path/to/walletname/\"")
+                    + HelpExampleRpc("loadwallet", "\"/path/to/walletname/\"")
+                    + "\nLoad wallet using absolute path (Windows):\n"
+                    + HelpExampleCli("loadwallet", "\"DriveLetter:\\path\\to\\walletname\\\"")
+                    + HelpExampleRpc("loadwallet", "\"DriveLetter:\\path\\to\\walletname\\\"")
                 },
         [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
 {
@@ -495,7 +502,7 @@ static RPCHelpMan unloadwallet()
         }
     }
 
-    UnloadWallet(std::move(wallet));
+    WaitForDeleteWallet(std::move(wallet));
 
     UniValue result(UniValue::VOBJ);
     PushWarnings(warnings, result);

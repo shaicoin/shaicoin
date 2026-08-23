@@ -11,6 +11,8 @@
 #include <flatfile.h>
 #include <kernel/cs_main.h>
 #include <primitives/block.h>
+#include <primitives/legacy_block.h>
+#include <pow.h>
 #include <serialize.h>
 #include <sync.h>
 #include <uint256.h>
@@ -66,7 +68,7 @@ public:
         READWRITE(VARINT(obj.nTimeLast));
     }
 
-    CBlockFileInfo() {}
+    CBlockFileInfo() = default;
 
     std::string ToString() const;
 
@@ -102,7 +104,7 @@ enum BlockStatus : uint32_t {
      *
      * If a block's validity is at least VALID_TRANSACTIONS, CBlockIndex::nTx will be set. If a block and all previous
      * blocks back to the genesis block or an assumeutxo snapshot block are at least VALID_TRANSACTIONS,
-     * CBlockIndex::nChainTx will be set.
+     * CBlockIndex::m_chain_tx_count will be set.
      */
     BLOCK_VALID_TRANSACTIONS =    3,
 
@@ -173,13 +175,12 @@ public:
     //! This value will be non-zero if this block and all previous blocks back
     //! to the genesis block or an assumeutxo snapshot block have reached the
     //! VALID_TRANSACTIONS level.
-    //! Change to 64-bit type before 2024 (assuming worst case of 60 byte transactions).
-    unsigned int nChainTx{0};
+    uint64_t m_chain_tx_count{0};
 
     //! Verification status of this block. See enum BlockStatus
     //!
     //! Note: this value is modified to show BLOCK_OPT_WITNESS during UTXO snapshot
-    //! load to avoid the block index being spuriously rewound.
+    //! load to avoid a spurious startup failure requiring -reindex.
     //! @sa NeedsRedownload
     //! @sa ActivateSnapshot
     uint32_t nStatus GUARDED_BY(::cs_main){0};
@@ -190,6 +191,14 @@ public:
     uint32_t nTime{0};
     uint32_t nBits{0};
     uint32_t nNonce{0};
+    std::array<uint16_t, GRAPH_SIZE> vdfSolution;
+    //! Post-fork extension commitment bound into the RandomX proof-of-work preimage.
+    //! Null for legacy blocks.
+    uint256 hashExtCommitment{};
+
+    //! (memory only) RandomX proof-of-work hash, cached when the block's PoW is verified.
+    //! Null for legacy blocks and for blocks whose PoW was not re-verified this session.
+    uint256 randomXPowHash{};
 
     //! (memory only) Sequential id assigned to distinguish order in which blocks are received.
     int32_t nSequenceId{0};
@@ -202,8 +211,26 @@ public:
           hashMerkleRoot{block.hashMerkleRoot},
           nTime{block.nTime},
           nBits{block.nBits},
-          nNonce{block.nNonce}
+          nNonce{block.nNonce},
+          hashExtCommitment{block.hashExtCommitment}
     {
+        vdfSolution.fill(USHRT_MAX);
+    }
+
+    explicit CBlockIndex(const CLegacyBlockHeader& block)
+        : nVersion{block.nVersion},
+          hashMerkleRoot{block.hashMerkleRoot},
+          nTime{block.nTime},
+          nBits{block.nBits},
+          nNonce{block.nNonce},
+          vdfSolution{block.vdfSolution}
+    {
+    }
+
+    bool IsPostFork() const
+    {
+        return std::all_of(vdfSolution.begin(), vdfSolution.end(),
+                           [](uint16_t v) { return v == USHRT_MAX; });
     }
 
     FlatFilePos GetBlockPos() const EXCLUSIVE_LOCKS_REQUIRED(::cs_main)
@@ -238,6 +265,21 @@ public:
         block.nTime = nTime;
         block.nBits = nBits;
         block.nNonce = nNonce;
+        block.hashExtCommitment = hashExtCommitment;
+        return block;
+    }
+
+    CLegacyBlockHeader GetLegacyBlockHeader() const
+    {
+        CLegacyBlockHeader block;
+        block.nVersion = nVersion;
+        if (pprev)
+            block.hashPrevBlock = pprev->GetBlockHash();
+        block.hashMerkleRoot = hashMerkleRoot;
+        block.nTime = nTime;
+        block.nBits = nBits;
+        block.nNonce = nNonce;
+        block.vdfSolution = vdfSolution;
         return block;
     }
 
@@ -254,10 +296,10 @@ public:
      * Does not imply the transactions are consensus-valid (ConnectTip might fail)
      * Does not imply the transactions are still stored on disk. (IsBlockPruned might return true)
      *
-     * Note that this will be true for the snapshot base block, if one is loaded, since its nChainTx value will have
+     * Note that this will be true for the snapshot base block, if one is loaded, since its m_chain_tx_count value will have
      * been set manually based on the related AssumeutxoData entry.
      */
-    bool HaveNumChainTxs() const { return nChainTx != 0; }
+    bool HaveNumChainTxs() const { return m_chain_tx_count != 0; }
 
     NodeSeconds Time() const
     {
@@ -395,17 +437,39 @@ public:
         READWRITE(obj.nTime);
         READWRITE(obj.nBits);
         READWRITE(obj.nNonce);
+        READWRITE(obj.vdfSolution);
+        // Post-fork blocks additionally persist the extension commitment that is
+        // bound into the proof-of-work. Legacy entries are left byte-identical.
+        bool isPost = std::all_of(obj.vdfSolution.begin(), obj.vdfSolution.end(),
+                                  [](uint16_t v) { return v == USHRT_MAX; });
+        if (isPost) {
+            READWRITE(obj.hashExtCommitment);
+        }
     }
 
     uint256 ConstructBlockHash() const
     {
-        CBlockHeader block;
+        bool isPost = std::all_of(vdfSolution.begin(), vdfSolution.end(),
+                                  [](uint16_t v) { return v == USHRT_MAX; });
+        if (isPost) {
+            CBlockHeader block;
+            block.nVersion = nVersion;
+            block.hashPrevBlock = hashPrev;
+            block.hashMerkleRoot = hashMerkleRoot;
+            block.nTime = nTime;
+            block.nBits = nBits;
+            block.nNonce = nNonce;
+            block.hashExtCommitment = hashExtCommitment;
+            return block.GetHash();
+        }
+        CLegacyBlockHeader block;
         block.nVersion = nVersion;
         block.hashPrevBlock = hashPrev;
         block.hashMerkleRoot = hashMerkleRoot;
         block.nTime = nTime;
         block.nBits = nBits;
         block.nNonce = nNonce;
+        block.vdfSolution = vdfSolution;
         return block.GetHash();
     }
 

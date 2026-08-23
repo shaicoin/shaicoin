@@ -21,38 +21,6 @@
 
 BOOST_FIXTURE_TEST_SUITE(validation_tests, TestingSetup)
 
-static void TestBlockSubsidyHalvings(const Consensus::Params& consensusParams)
-{
-    int maxHalvings = 64;
-    CAmount nInitialSubsidy = 50 * COIN;
-
-    CAmount nPreviousSubsidy = nInitialSubsidy * 2; // for height == 0
-    BOOST_CHECK_EQUAL(nPreviousSubsidy, nInitialSubsidy * 2);
-    for (int nHalvings = 0; nHalvings < maxHalvings; nHalvings++) {
-        int nHeight = nHalvings * consensusParams.nSubsidyHalvingInterval;
-        CAmount nSubsidy = GetBlockSubsidy(nHeight, consensusParams);
-        BOOST_CHECK(nSubsidy <= nInitialSubsidy);
-        BOOST_CHECK_EQUAL(nSubsidy, nPreviousSubsidy / 2);
-        nPreviousSubsidy = nSubsidy;
-    }
-    BOOST_CHECK_EQUAL(GetBlockSubsidy(maxHalvings * consensusParams.nSubsidyHalvingInterval, consensusParams), 0);
-}
-
-static void TestBlockSubsidyHalvings(int nSubsidyHalvingInterval)
-{
-    Consensus::Params consensusParams;
-    consensusParams.nSubsidyHalvingInterval = nSubsidyHalvingInterval;
-    TestBlockSubsidyHalvings(consensusParams);
-}
-
-BOOST_AUTO_TEST_CASE(block_subsidy_test)
-{
-    const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
-    TestBlockSubsidyHalvings(chainParams->GetConsensus()); // As in main
-    TestBlockSubsidyHalvings(150); // As in regtest
-    TestBlockSubsidyHalvings(1000); // Just another interval
-}
-
 BOOST_AUTO_TEST_CASE(subsidy_limit_test)
 {
     const auto chainParams = CreateChainParams(*m_node.args, ChainType::MAIN);
@@ -143,11 +111,11 @@ BOOST_AUTO_TEST_CASE(test_assumeutxo)
 
     const auto out110 = *params->AssumeutxoForHeight(110);
     BOOST_CHECK_EQUAL(out110.hash_serialized.ToString(), "6657b736d4fe4db0cbc796789e812d5dba7f5c143764b1b6905612f1830609d1");
-    BOOST_CHECK_EQUAL(out110.nChainTx, 111U);
+    BOOST_CHECK_EQUAL(out110.m_chain_tx_count, 111U);
 
-    const auto out110_2 = *params->AssumeutxoForBlockhash(uint256S("0x696e92821f65549c7ee134edceeeeaaa4105647a3c4fd9f298c0aec0ab50425c"));
+    const auto out110_2 = *params->AssumeutxoForBlockhash(uint256{"696e92821f65549c7ee134edceeeeaaa4105647a3c4fd9f298c0aec0ab50425c"});
     BOOST_CHECK_EQUAL(out110_2.hash_serialized.ToString(), "6657b736d4fe4db0cbc796789e812d5dba7f5c143764b1b6905612f1830609d1");
-    BOOST_CHECK_EQUAL(out110_2.nChainTx, 111U);
+    BOOST_CHECK_EQUAL(out110_2.m_chain_tx_count, 111U);
 }
 
 BOOST_AUTO_TEST_CASE(block_malleation)

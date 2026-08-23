@@ -100,7 +100,7 @@ public:
 
                 assert(p <= limit);
                 base[std::min(bufsize - 1, (int)(p - base))] = '\0';
-                LogPrintLevel(BCLog::LEVELDB, BCLog::Level::Debug, "%s", base); // NOLINT(bitcoin-unterminated-logprintf)
+                LogDebug(BCLog::LEVELDB, "%s\n", util::RemoveSuffixView(base, "\n"));
                 if (base != buffer) {
                     delete[] base;
                 }
@@ -130,7 +130,7 @@ static void SetMaxOpenFiles(leveldb::Options *options) {
         options->max_open_files = 64;
     }
 #endif
-    LogPrint(BCLog::LEVELDB, "LevelDB using max_open_files=%d (default=%d)\n",
+    LogDebug(BCLog::LEVELDB, "LevelDB using max_open_files=%d (default=%d)\n",
              options->max_open_files, default_open_files);
 }
 
@@ -147,6 +147,7 @@ static leveldb::Options GetOptions(size_t nCacheSize)
         // on corruption in later versions.
         options.paranoid_checks = true;
     }
+    options.max_file_size = std::max(options.max_file_size, DBWRAPPER_MAX_FILE_SIZE);
     SetMaxOpenFiles(&options);
     return options;
 }
@@ -299,7 +300,7 @@ bool CDBWrapper::WriteBatch(CDBBatch& batch, bool fSync)
     HandleError(status);
     if (log_memory) {
         double mem_after = DynamicMemoryUsage() / 1024.0 / 1024;
-        LogPrint(BCLog::LEVELDB, "WriteBatch memory usage: db=%s, before=%.1fMiB, after=%.1fMiB\n",
+        LogDebug(BCLog::LEVELDB, "WriteBatch memory usage: db=%s, before=%.1fMiB, after=%.1fMiB\n",
                  m_name, mem_before, mem_after);
     }
     return true;
@@ -310,7 +311,7 @@ size_t CDBWrapper::DynamicMemoryUsage() const
     std::string memory;
     std::optional<size_t> parsed;
     if (!DBContext().pdb->GetProperty("leveldb.approximate-memory-usage", &memory) || !(parsed = ToIntegral<size_t>(memory))) {
-        LogPrint(BCLog::LEVELDB, "Failed to get approximate-memory-usage property\n");
+        LogDebug(BCLog::LEVELDB, "Failed to get approximate-memory-usage property\n");
         return 0;
     }
     return parsed.value();

@@ -9,6 +9,7 @@
 #include <consensus/params.h>
 #include <kernel/messagestartchars.h>
 #include <primitives/block.h>
+#include <primitives/legacy_block.h>
 #include <uint256.h>
 #include <util/chaintype.h>
 #include <util/hash_type.h>
@@ -50,11 +51,11 @@ struct AssumeutxoData {
     //! The expected hash of the deserialized UTXO set.
     AssumeutxoHash hash_serialized;
 
-    //! Used to populate the nChainTx value, which is used during BlockManager::LoadBlockIndex().
+    //! Used to populate the m_chain_tx_count value, which is used during BlockManager::LoadBlockIndex().
     //!
     //! We need to hardcode the value here because this is computed cumulatively using block data,
     //! which we do not necessarily have at the time of snapshot load.
-    unsigned int nChainTx;
+    uint64_t m_chain_tx_count;
 
     //! The hash of the base block for this snapshot. Used to refer to assumeutxo data
     //! prior to having a loaded blockindex.
@@ -69,7 +70,7 @@ struct AssumeutxoData {
  */
 struct ChainTxData {
     int64_t nTime;    //!< UNIX timestamp of last known number of transactions
-    int64_t nTxCount; //!< total number of transactions between genesis and that timestamp
+    uint64_t tx_count; //!< total number of transactions between genesis and that timestamp
     double dTxRate;   //!< estimated number of transactions per second after that timestamp
 };
 
@@ -95,7 +96,7 @@ public:
     uint16_t GetDefaultPort() const { return nDefaultPort; }
     std::vector<int> GetAvailableSnapshotHeights() const;
 
-    const CBlock& GenesisBlock() const { return genesis; }
+    const CLegacyBlock& GenesisBlock() const { return genesis; }
     /** Default value for -checkmempool and -checkblockindex argument */
     bool DefaultConsistencyChecks() const { return fDefaultConsistencyChecks; }
     /** If this chain is exclusively used for testing */
@@ -155,15 +156,17 @@ public:
         std::unordered_map<Consensus::DeploymentPos, VersionBitsParameters> version_bits_parameters{};
         std::unordered_map<Consensus::BuriedDeployment, int> activation_heights{};
         bool fastprune{false};
+        bool enforce_bip94{false};
     };
 
     static std::unique_ptr<const CChainParams> RegTest(const RegTestOptions& options);
     static std::unique_ptr<const CChainParams> SigNet(const SigNetOptions& options);
     static std::unique_ptr<const CChainParams> Main();
     static std::unique_ptr<const CChainParams> TestNet();
+    static std::unique_ptr<const CChainParams> TestNet4();
 
 protected:
-    CChainParams() {}
+    CChainParams() = default;
 
     Consensus::Params consensus;
     MessageStartChars pchMessageStart;
@@ -175,7 +178,7 @@ protected:
     std::vector<unsigned char> base58Prefixes[MAX_BASE58_TYPES];
     std::string bech32_hrp;
     ChainType m_chain_type;
-    CBlock genesis;
+    CLegacyBlock genesis;
     std::vector<uint8_t> vFixedSeeds;
     bool fDefaultConsistencyChecks;
     bool m_is_mockable_chain;

@@ -8,11 +8,12 @@ ifneq ($(host),$(build))
 $(package)_dependencies += native_capnp
 endif
 
-define $(package)_set_vars :=
+define $(package)_set_vars
 ifneq ($(host),$(build))
 $(package)_config_opts := -DCAPNP_EXECUTABLE="$$(native_capnp_prefixbin)/capnp"
 $(package)_config_opts += -DCAPNPC_CXX_EXECUTABLE="$$(native_capnp_prefixbin)/capnpc-c++"
 endif
+$(package)_cxxflags += -fdebug-prefix-map=$($(package)_extract_dir)=/usr -fmacro-prefix-map=$($(package)_extract_dir)=/usr
 endef
 
 define $(package)_config_cmds

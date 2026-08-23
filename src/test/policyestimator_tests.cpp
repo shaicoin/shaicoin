@@ -1,8 +1,9 @@
-// Copyright (c) 2011-2022 The Bitcoin Core developers
+// Copyright (c) 2011-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <policy/fees.h>
+#include <policy/fees_args.h>
 #include <policy/policy.h>
 #include <test/util/txmempool.h>
 #include <txmempool.h>
@@ -18,7 +19,7 @@ BOOST_FIXTURE_TEST_SUITE(policyestimator_tests, ChainTestingSetup)
 
 BOOST_AUTO_TEST_CASE(BlockPolicyEstimates)
 {
-    CBlockPolicyEstimator& feeEst = *Assert(m_node.fee_estimator);
+    CBlockPolicyEstimator feeEst{FeeestPath(*m_node.args), DEFAULT_ACCEPT_STALE_FEE_ESTIMATES};
     CTxMemPool& mpool = *Assert(m_node.mempool);
     m_node.validation_signals->RegisterValidationInterface(&feeEst);
     TestMemPoolEntryHelper entry;
@@ -62,9 +63,9 @@ BOOST_AUTO_TEST_CASE(BlockPolicyEstimates)
                 tx.vin[0].prevout.n = 10000*blocknum+100*j+k; // make transaction unique
                 {
                     LOCK2(cs_main, mpool.cs);
-                    mpool.addUnchecked(entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));
+                    AddToMempool(mpool, entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));
                     // Since TransactionAddedToMempool callbacks are generated in ATMP,
-                    // not addUnchecked, we cheat and create one manually here
+                    // not AddToMempool, we cheat and create one manually here
                     const int64_t virtual_size = GetVirtualTransactionSize(*MakeTransactionRef(tx));
                     const NewMempoolTransactionInfo tx_info{NewMempoolTransactionInfo(MakeTransactionRef(tx),
                                                                                       feeV[j],
@@ -163,9 +164,9 @@ BOOST_AUTO_TEST_CASE(BlockPolicyEstimates)
                 tx.vin[0].prevout.n = 10000*blocknum+100*j+k;
                 {
                     LOCK2(cs_main, mpool.cs);
-                    mpool.addUnchecked(entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));
+                    AddToMempool(mpool, entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));
                     // Since TransactionAddedToMempool callbacks are generated in ATMP,
-                    // not addUnchecked, we cheat and create one manually here
+                    // not AddToMempool, we cheat and create one manually here
                     const int64_t virtual_size = GetVirtualTransactionSize(*MakeTransactionRef(tx));
                     const NewMempoolTransactionInfo tx_info{NewMempoolTransactionInfo(MakeTransactionRef(tx),
                                                                                       feeV[j],
@@ -227,9 +228,9 @@ BOOST_AUTO_TEST_CASE(BlockPolicyEstimates)
                 tx.vin[0].prevout.n = 10000*blocknum+100*j+k;
                 {
                     LOCK2(cs_main, mpool.cs);
-                    mpool.addUnchecked(entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));
+                    AddToMempool(mpool, entry.Fee(feeV[j]).Time(Now<NodeSeconds>()).Height(blocknum).FromTx(tx));
                     // Since TransactionAddedToMempool callbacks are generated in ATMP,
-                    // not addUnchecked, we cheat and create one manually here
+                    // not AddToMempool, we cheat and create one manually here
                     const int64_t virtual_size = GetVirtualTransactionSize(*MakeTransactionRef(tx));
                     const NewMempoolTransactionInfo tx_info{NewMempoolTransactionInfo(MakeTransactionRef(tx),
                                                                                       feeV[j],

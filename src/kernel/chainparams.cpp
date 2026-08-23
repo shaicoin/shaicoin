@@ -13,6 +13,7 @@
 #include <kernel/messagestartchars.h>
 #include <logging.h>
 #include <primitives/block.h>
+#include <primitives/legacy_block.h>
 #include <primitives/transaction.h>
 #include <script/interpreter.h>
 #include <script/script.h>
@@ -26,23 +27,36 @@
 #include <cstring>
 #include <type_traits>
 
-static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesisOutputScript, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
+using namespace util::hex_literals;
+
+// Workaround MSVC bug triggering C7595 when calling consteval constructors in
+// initializer lists.
+// A fix may be on the way:
+// https://developercommunity.visualstudio.com/t/consteval-conversion-function-fails/1579014
+#if defined(_MSC_VER)
+auto consteval_ctor(auto&& input) { return input; }
+#else
+#define consteval_ctor(input) (input)
+#endif
+
+static CLegacyBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesisOutputScript, uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
 {
     CMutableTransaction txNew;
     txNew.version = 1;
     txNew.vin.resize(1);
     txNew.vout.resize(1);
-    txNew.vin[0].scriptSig = CScript() << 486604799 << CScriptNum(4) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
+    txNew.vin[0].scriptSig = CScript() << nBits << CScriptNum(4) << std::vector<unsigned char>((const unsigned char*)pszTimestamp, (const unsigned char*)pszTimestamp + strlen(pszTimestamp));
     txNew.vout[0].nValue = genesisReward;
     txNew.vout[0].scriptPubKey = genesisOutputScript;
 
-    CBlock genesis;
+    CLegacyBlock genesis;
     genesis.nTime    = nTime;
     genesis.nBits    = nBits;
     genesis.nNonce   = nNonce;
     genesis.nVersion = nVersion;
     genesis.vtx.push_back(MakeTransactionRef(std::move(txNew)));
     genesis.hashPrevBlock.SetNull();
+    genesis.vdfSolution = { 0, 2, 1, 4, 6, 5, 8, 3, 10, 7, 12, 11, 9, 16, 13, 18, 15, 14, 20, 17, 22, 21, 24, 19, 26, 23, 28, 27, 25, 32, 29, 34, 31, 30, 36, 33, 38, 37, 40, 35, 42, 39, 44, 43, 41, 48, 45, 50, 47, 46, 52, 49, 54, 53, 56, 51, 58, 55, 60, 59, 57, 64, 61, 66, 63, 62, 68, 65, 70, 69, 72, 67, 74, 71, 76, 75, 73, 80, 77, 82, 79, 78, 84, 81, 86, 85, 88, 83, 90, 87, 92, 91, 89, 96, 93, 98, 95, 94, 100, 97, 102, 101, 104, 99, 106, 103, 108, 107, 105, 112, 109, 114, 111, 110, 116, 113, 118, 117, 120, 115, 122, 119, 124, 123, 121, 128, 125, 130, 127, 126, 132, 129, 134, 133, 136, 131, 138, 135, 140, 139, 137, 144, 141, 146, 143, 142, 148, 145, 150, 149, 152, 147, 154, 151, 156, 155, 153, 160, 157, 162, 159, 158, 164, 161, 166, 165, 168, 163, 170, 167, 172, 171, 169, 176, 173, 178, 175, 174, 180, 177, 182, 181, 184, 179, 186, 183, 188, 187, 185, 192, 189, 194, 191, 190, 196, 193, 198, 197, 200, 195, 202, 199, 204, 203, 201, 208, 205, 210, 207, 206, 212, 209, 214, 213, 216, 211, 218, 215, 220, 219, 217, 224, 221, 226, 223, 222, 228, 225, 230, 229, 232, 227, 234, 231, 236, 235, 233, 240, 237, 242, 239, 238, 244, 241, 246, 245, 248, 243, 250, 247, 252, 251, 249, 256, 253, 258, 255, 254, 260, 257, 262, 261, 264, 259, 266, 263, 268, 267, 265, 272, 269, 274, 271, 270, 276, 273, 278, 277, 280, 275, 282, 279, 284, 283, 281, 288, 285, 290, 287, 286, 292, 289, 294, 293, 296, 291, 298, 295, 300, 299, 297, 304, 301, 306, 303, 302, 308, 305, 310, 309, 312, 307, 314, 311, 316, 315, 313, 320, 317, 322, 319, 318, 324, 321, 326, 325, 328, 323, 330, 327, 332, 331, 329, 336, 333, 338, 335, 334, 340, 337, 342, 341, 344, 339, 346, 343, 348, 347, 345, 352, 349, 354, 351, 350, 356, 353, 358, 357, 360, 355, 362, 359, 364, 363, 361, 368, 365, 370, 367, 366, 372, 369, 374, 373, 376, 371, 378, 375, 380, 379, 377, 384, 381, 386, 383, 382, 388, 385, 390, 389, 392, 387, 394, 391, 396, 395, 393, 400, 397, 402, 399, 398, 404, 401, 406, 405, 408, 403, 410, 407, 412, 411, 409, 416, 413, 418, 415, 414, 420, 417, 422, 421, 424, 419, 426, 423, 428, 427, 425, 432, 429, 434, 431, 430, 436, 433, 438, 437, 440, 435, 442, 439, 444, 443, 441, 448, 445, 450, 447, 446, 452, 449, 454, 453, 456, 451, 458, 455, 460, 459, 457, 464, 461, 466, 463, 462, 468, 465, 470, 469, 472, 467, 474, 471, 476, 475, 473, 480, 477, 482, 479, 478, 484, 481, 486, 485, 488, 483, 490, 487, 492, 491, 489, 496, 493, 498, 495, 494, 500, 497, 502, 501, 504, 499, 506, 503, 508, 507, 505, 512, 509, 514, 511, 510, 516, 513, 518, 517, 520, 515, 522, 519, 524, 523, 521, 528, 525, 530, 527, 526, 532, 529, 534, 533, 536, 531, 538, 535, 540, 539, 537, 544, 541, 546, 543, 542, 548, 545, 550, 549, 552, 547, 554, 551, 556, 555, 553, 560, 557, 562, 559, 558, 564, 561, 566, 565, 568, 563, 570, 567, 572, 571, 569, 576, 573, 578, 575, 574, 580, 577, 582, 581, 584, 579, 586, 583, 588, 587, 585, 592, 589, 594, 591, 590, 596, 593, 598, 597, 600, 595, 602, 599, 604, 603, 601, 608, 605, 610, 607, 606, 612, 609, 614, 613, 616, 611, 618, 615, 620, 619, 617, 624, 621, 626, 623, 622, 628, 625, 630, 629, 632, 627, 634, 631, 636, 635, 633, 640, 637, 642, 639, 638, 644, 641, 646, 645, 648, 643, 650, 647, 652, 651, 649, 656, 653, 658, 655, 654, 660, 657, 662, 661, 664, 659, 666, 663, 668, 667, 665, 672, 669, 674, 671, 670, 676, 673, 678, 677, 680, 675, 682, 679, 684, 683, 681, 688, 685, 690, 687, 686, 692, 689, 694, 693, 696, 691, 698, 695, 700, 699, 697, 704, 701, 706, 703, 702, 708, 705, 710, 709, 712, 707, 714, 711, 716, 715, 713, 720, 717, 722, 719, 718, 724, 721, 726, 725, 728, 723, 730, 727, 732, 731, 729, 736, 733, 738, 735, 734, 740, 737, 742, 741, 744, 739, 746, 743, 748, 747, 745, 752, 749, 754, 751, 750, 756, 753, 758, 757, 760, 755, 762, 759, 764, 763, 761, 768, 765, 770, 767, 766, 772, 769, 774, 773, 776, 771, 778, 775, 780, 779, 777, 784, 781, 786, 783, 782, 788, 785, 790, 789, 792, 787, 794, 791, 796, 795, 793, 800, 797, 802, 799, 798, 804, 801, 806, 805, 808, 803, 810, 807, 812, 811, 809, 816, 813, 818, 815, 814, 820, 817, 822, 821, 824, 819, 826, 823, 828, 827, 825, 832, 829, 834, 831, 830, 836, 833, 838, 837, 840, 835, 842, 839, 844, 843, 841, 848, 845, 850, 847, 846, 852, 849, 854, 853, 856, 851, 858, 855, 860, 859, 857, 864, 861, 866, 863, 862, 868, 865, 870, 869, 872, 867, 874, 871, 876, 875, 873, 880, 877, 882, 879, 878, 884, 881, 886, 885, 888, 883, 890, 887, 892, 891, 889, 896, 893, 898, 895, 894, 900, 897, 902, 901, 904, 899, 906, 903, 908, 907, 905, 912, 909, 914, 911, 910, 916, 913, 918, 917, 920, 915, 922, 919, 924, 923, 921, 928, 925, 930, 927, 926, 932, 929, 934, 933, 936, 931, 938, 935, 940, 939, 937, 944, 941, 946, 943, 942, 948, 945, 950, 949, 952, 947, 954, 951, 956, 955, 953, 960, 957, 962, 959, 958, 964, 961, 966, 965, 968, 963, 970, 967, 972, 971, 969, 976, 973, 978, 975, 974, 980, 977, 982, 981, 984, 979, 986, 983, 988, 987, 985, 992, 989, 994, 991, 990, 996, 993, 998, 997, 1000, 995, 1002, 999, 1004, 1003, 1001, 1008, 1005, 1010, 1007, 1006, 1012, 1009, 1014, 1013, 1016, 1011, 1018, 1015, 1020, 1019, 1017, 1024, 1021, 1026, 1023, 1022, 1028, 1025, 1030, 1029, 1032, 1027, 1034, 1031, 1036, 1035, 1033, 1040, 1037, 1042, 1039, 1038, 1044, 1041, 1046, 1045, 1048, 1043, 1050, 1047, 1052, 1051, 1049, 1056, 1053, 1058, 1055, 1054, 1060, 1057, 1062, 1061, 1064, 1059, 1066, 1063, 1068, 1067, 1065, 1072, 1069, 1074, 1071, 1070, 1076, 1073, 1078, 1077, 1080, 1075, 1082, 1079, 1084, 1083, 1081, 1088, 1085, 1090, 1087, 1086, 1092, 1089, 1094, 1093, 1096, 1091, 1098, 1095, 1100, 1099, 1097, 1104, 1101, 1106, 1103, 1102, 1108, 1105, 1110, 1109, 1112, 1107, 1114, 1111, 1116, 1115, 1113, 1120, 1117, 1122, 1119, 1118, 1124, 1121, 1126, 1125, 1128, 1123, 1130, 1127, 1132, 1131, 1129, 1136, 1133, 1138, 1135, 1134, 1140, 1137, 1142, 1141, 1144, 1139, 1146, 1143, 1148, 1147, 1145, 1152, 1149, 1154, 1151, 1150, 1156, 1153, 1158, 1157, 1160, 1155, 1162, 1159, 1164, 1163, 1161, 1168, 1165, 1170, 1167, 1166, 1172, 1169, 1174, 1173, 1176, 1171, 1178, 1175, 1180, 1179, 1177, 1184, 1181, 1186, 1183, 1182, 1188, 1185, 1190, 1189, 1192, 1187, 1194, 1191, 1196, 1195, 1193, 1200, 1197, 1202, 1199, 1198, 1204, 1201, 1206, 1205, 1208, 1203, 1210, 1207, 1212, 1211, 1209, 1216, 1213, 1218, 1215, 1214, 1220, 1217, 1222, 1221, 1224, 1219, 1226, 1223, 1228, 1227, 1225, 1232, 1229, 1234, 1231, 1230, 1236, 1233, 1238, 1237, 1240, 1235, 1242, 1239, 1244, 1243, 1241, 1248, 1245, 1250, 1247, 1246, 1252, 1249, 1254, 1253, 1256, 1251, 1258, 1255, 1260, 1259, 1257, 1264, 1261, 1266, 1263, 1262, 1268, 1265, 1270, 1269, 1272, 1267, 1274, 1271, 1276, 1275, 1273, 1280, 1277, 1282, 1279, 1278, 1284, 1281, 1286, 1285, 1288, 1283, 1290, 1287, 1292, 1291, 1289, 1296, 1293, 1298, 1295, 1294, 1300, 1297, 1302, 1301, 1304, 1299, 1306, 1303, 1308, 1307, 1305, 1312, 1309, 1314, 1311, 1310, 1316, 1313, 1318, 1317, 1320, 1315, 1322, 1319, 1324, 1323, 1321, 1328, 1325, 1330, 1327, 1326, 1332, 1329, 1334, 1333, 1336, 1331, 1338, 1335, 1340, 1339, 1337, 1344, 1341, 1346, 1343, 1342, 1348, 1345, 1350, 1349, 1352, 1347, 1354, 1351, 1356, 1355, 1353, 1360, 1357, 1362, 1359, 1358, 1364, 1361, 1366, 1365, 1371, 1369, 1370, 1363, 1368, 1367, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535 };
     genesis.hashMerkleRoot = BlockMerkleRoot(genesis);
     return genesis;
 }
@@ -58,10 +72,10 @@ static CBlock CreateGenesisBlock(const char* pszTimestamp, const CScript& genesi
  *     CTxOut(nValue=50.00000000, scriptPubKey=0x5F1DF16B2B704C8A578D0B)
  *   vMerkleTree: 4a5e1e
  */
-static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
+static CLegacyBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits, int32_t nVersion, const CAmount& genesisReward)
 {
-    const char* pszTimestamp = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
-    const CScript genesisOutputScript = CScript() << ParseHex("04678afdb0fe5548271967f1a67130b7105cd6a828e03909a67962e0ea1f61deb649f6bc3f4cef38c4f35504e51ec112de5c384df7ba0b8d578a4c702b6bf11d5f") << OP_CHECKSIG;
+    const char* pszTimestamp = "Proof-of-work is essentially one-CPU-one-vote";
+    const CScript genesisOutputScript = CScript() << ParseHex("046f93d36211501191a15cddf852fed215cd16135c2484832f801f3512e60b3d8b69be5a6b181ad7f18062bdd2d2906a2c90245476f74fffc9ab7af5780f55344b") << OP_CHECKSIG;
     return CreateGenesisBlock(pszTimestamp, genesisOutputScript, nTime, nNonce, nBits, nVersion, genesisReward);
 }
 
@@ -74,25 +88,26 @@ public:
         m_chain_type = ChainType::MAIN;
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
-        consensus.nSubsidyHalvingInterval = 210000;
+        consensus.tailEmissionBlockHeight = 888420;
         consensus.script_flag_exceptions.emplace( // BIP16 exception
-            uint256S("0x00000000000002dc756eebf4f49723ed8d30cc28a5f108eb94b1ba88ac4f9c22"), SCRIPT_VERIFY_NONE);
+            uint256{"00000000000002dc756eebf4f49723ed8d30cc28a5f108eb94b1ba88ac4f9c22"}, SCRIPT_VERIFY_NONE);
         consensus.script_flag_exceptions.emplace( // Taproot exception
-            uint256S("0x0000000000000000000f14c35b2d841e986ab5441de8c585d5ffe55ea1e395ad"), SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_WITNESS);
-        consensus.BIP34Height = 227931;
-        consensus.BIP34Hash = uint256S("0x000000000000024b89b42a942fe0d9fea3bb44ab7bd1b19115dd6a759c0808b8");
-        consensus.BIP65Height = 388381; // 000000000000000004c2b624ed5d7756c508d90fd0da2c7c679febfa6c4735f0
-        consensus.BIP66Height = 363725; // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
-        consensus.CSVHeight = 419328; // 000000000000000004a1b34462cb8aeebd5799177f7a29cf28f2d1961716b5b5
-        consensus.SegwitHeight = 481824; // 0000000000000000001c8018d9cb3b742ef25114f27563e3fc4a1902167f9893
-        consensus.MinBIP9WarningHeight = 483840; // segwit activation height + miner confirmation window
-        consensus.powLimit = uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
-        consensus.nPowTargetSpacing = 10 * 60;
+            uint256{"0000000000000000000f14c35b2d841e986ab5441de8c585d5ffe55ea1e395ad"}, SCRIPT_VERIFY_P2SH | SCRIPT_VERIFY_WITNESS);
+        consensus.BIP34Height = 0;
+        consensus.BIP34Hash = uint256{"0019592cd5c0ef222adcaa85d4000602636a05e57b3541a844a90644815cacbb"};
+        consensus.BIP65Height = 0; // 000000000000000004c2b624ed5d7756c508d90fd0da2c7c679febfa6c4735f0
+        consensus.BIP66Height = 0; // 00000000000000000379eaa19dce8c9b722d46ae6a57c2f1a988119488b50931
+        consensus.CSVHeight = 0; // 000000000000000004a1b34462cb8aeebd5799177f7a29cf28f2d1961716b5b5
+        consensus.SegwitHeight = 0; // 0000000000000000001c8018d9cb3b742ef25114f27563e3fc4a1902167f9893
+        consensus.MinBIP9WarningHeight = 24; // segwit activation height + miner confirmation window
+        consensus.powLimit = uint256{"007fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        consensus.nPowTargetTimespan = 2 * 60;
+        consensus.nPowTargetSpacing = 2 * 60;
         consensus.fPowAllowMinDifficultyBlocks = false;
+        consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;
-        consensus.nRuleChangeActivationThreshold = 1815; // 90% of 2016
-        consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
+        consensus.nRuleChangeActivationThreshold = 22; // ~90% of 24
+        consensus.nMinerConfirmationWindow = 30; // nPowTargetTimespan / nPowTargetSpacing
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
@@ -102,52 +117,47 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].bit = 2;
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nStartTime = 1619222400; // April 24th, 2021
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = 1628640000; // August 11th, 2021
-        consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 709632; // Approximately November 12th, 2021
+        consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 0; // Approximately November 12th, 2021
 
-        consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000063c4ebd298db40af57541800");
-        consensus.defaultAssumeValid = uint256S("0x000000000000000000026811d149d4d261995ec5b3f64f439a0a10e1a464af9a"); // 824000
-
+        consensus.nMinimumChainWork = uint256{"000000000000000000000000000000000000000000000000536fa34765b2a034"};
+        consensus.defaultAssumeValid = uint256{"000000000d1b5d852d5b8f3495a3543d0ea8cea18405bd59a21cd6cb3390e2e3"};
+        
         /**
          * The message start string is designed to be unlikely to occur in normal data.
          * The characters are rarely used upper ASCII, not valid as UTF-8, and produce
          * a large 32-bit integer with any alignment.
          */
-        pchMessageStart[0] = 0xf9;
+        pchMessageStart[0] = 0xe4;
         pchMessageStart[1] = 0xbe;
-        pchMessageStart[2] = 0xb4;
-        pchMessageStart[3] = 0xd9;
-        nDefaultPort = 8333;
+        pchMessageStart[2] = 0x7c;
+        pchMessageStart[3] = 0xd1;
+        nDefaultPort = 42069;
         nPruneAfterHeight = 100000;
-        m_assumed_blockchain_size = 600;
+        m_assumed_blockchain_size = 10;
         m_assumed_chain_state_size = 10;
 
-        genesis = CreateGenesisBlock(1231006505, 2083236893, 0x1d00ffff, 1, 50 * COIN);
+        genesis = CreateGenesisBlock(1723206420, 2847556069, 0x1f7fffff, 1, 11 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x000000000019d6689c085ae165831e934ff763ae46a2a6c172b3f1b60a8ce26f"));
-        assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+        // std::cout << consensus.hashGenesisBlock.ToString() << std::endl;
+        // std::cout << genesis.hashMerkleRoot.ToString() << std::endl;
+        assert(consensus.hashGenesisBlock == uint256{"0019592cd5c0ef222adcaa85d4000602636a05e57b3541a844a90644815cacbb"});
+        assert(genesis.hashMerkleRoot == uint256{"2a9f2576a15e81773726f78378842567276e3b43860290adfe30d113ca6cef76"});
 
         // Note that of those which support the service bits prefix, most only support a subset of
         // possible options.
         // This is fine at runtime as we'll fall back to using them as an addrfetch if they don't support the
         // service bits we want, but we should get them updated to support all service bits wanted by any
         // release ASAP to avoid it where possible.
-        vSeeds.emplace_back("seed.bitcoin.sipa.be."); // Pieter Wuille, only supports x1, x5, x9, and xd
-        vSeeds.emplace_back("dnsseed.bluematt.me."); // Matt Corallo, only supports x9
-        vSeeds.emplace_back("dnsseed.bitcoin.dashjr-list-of-p2p-nodes.us."); // Luke Dashjr
-        vSeeds.emplace_back("seed.bitcoinstats.com."); // Christian Decker, supports x1 - xf
-        vSeeds.emplace_back("seed.bitcoin.jonasschnelli.ch."); // Jonas Schnelli, only supports x1, x5, x9, and xd
-        vSeeds.emplace_back("seed.btc.petertodd.net."); // Peter Todd, only supports x1, x5, x9, and xd
-        vSeeds.emplace_back("seed.bitcoin.sprovoost.nl."); // Sjors Provoost
-        vSeeds.emplace_back("dnsseed.emzy.de."); // Stephan Oeste
-        vSeeds.emplace_back("seed.bitcoin.wiz.biz."); // Jason Maurice
 
-        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,0);
-        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,5);
-        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,128);
+        vSeeds.emplace_back("seeder.shaicoin.org.");
+
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,137);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,135);
+        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,117);
         base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x88, 0xB2, 0x1E};
         base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x88, 0xAD, 0xE4};
 
-        bech32_hrp = "bc";
+        bech32_hrp = "sh";
 
         vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_main), std::end(chainparams_seed_main));
 
@@ -156,31 +166,27 @@ public:
 
         checkpointData = {
             {
-                { 11111, uint256S("0x0000000069e244f73d78e8fd29ba2fd2ed618bd6fa2ee92559f542fdb26e7c1d")},
-                { 33333, uint256S("0x000000002dd5588a74784eaa7ab0507a18ad16a236e7b1ce69f00d7ddfb5d0a6")},
-                { 74000, uint256S("0x0000000000573993a3c9e41ce34471c079dcf5f52a0e824a81e7f953b8661a20")},
-                {105000, uint256S("0x00000000000291ce28027faea320c8d2b054b2e0fe44a773f3eefb151d6bdc97")},
-                {134444, uint256S("0x00000000000005b12ffd4cd315cd34ffd4a594f430ac814c91184a0d42d2b0fe")},
-                {168000, uint256S("0x000000000000099e61ea72015e79632f216fe6cb33d7899acb35b75c8303b763")},
-                {193000, uint256S("0x000000000000059f452a5f7340de6682a977387c17010ff6e6c3bd83ca8b1317")},
-                {210000, uint256S("0x000000000000048b95347e83192f69cf0366076336c639f9b7228e9ba171342e")},
-                {216116, uint256S("0x00000000000001b4f4b433e81ee46494af945cf96014816a4e2370f11b23df4e")},
-                {225430, uint256S("0x00000000000001c108384350f74090433e7fcf79a606b8e797f065b130575932")},
-                {250000, uint256S("0x000000000000003887df1f29024b06fc2200b55f8af8f35453d7be294df2d214")},
-                {279000, uint256S("0x0000000000000001ae8c72a0b0c301f67e3afca10e819efa9041e458e9bd7e40")},
-                {295000, uint256S("0x00000000000000004d9b4ef50f0f9d686fd69db2e03af35a100370c64632a983")},
+                { 0, uint256{"0019592cd5c0ef222adcaa85d4000602636a05e57b3541a844a90644815cacbb"} },
+                { 2180, uint256{"00055e4e77d39cc2e0600eebdc773162824fb8d42359879b4916e1adcb0bf4f9"} },
+                { 4349, uint256{"0018b0a66e8050d3d762b6322e6f082299a819e1af46a4fdad6632ef60038496"} },
+                { 5233, uint256{"00028e3e904613b234a753bf3cb4d7d94bb1953d26b88a3163ba0995d0949a6c"} },
+                { 9597, uint256{"00009bee1326c7a31769f9f5b14c737906113fbe11dc152d1026fbbe72ba686d"} },
+                { 18386, uint256{"00000e98c614a0cfbe63247dec8b1628611aa1decbbc5161ec761e5a3b93ba12"} },
+                { 23546, uint256{"0000035e8e01852db44541eadb03c210a69458ab28916c0479ef5d1b002e051e"} },
+                { 55451, uint256{"000000002948d8503f2fef431ad8117493debd0d1fbcddf7204738df0f712d09"} },
+                { 265980, uint256{"000000000001b2052bdf90d819a79761a688e22cda8e75d4c5b6fd31a17952cb" } },
+                { 324900, uint256{"000000003a969c048f616ac606c32c353bc56726e5e826e55fcd671d15823f4c"} },
+                { 468505, uint256{"000000000d1b5d852d5b8f3495a3543d0ea8cea18405bd59a21cd6cb3390e2e3"} }
             }
         };
 
-        m_assumeutxo_data = {
-            // TODO to be specified in a future patch.
-        };
+        m_assumeutxo_data = {};
 
         chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 4096 000000000000000000026811d149d4d261995ec5b3f64f439a0a10e1a464af9a
-            .nTime    = 1704194835,
-            .nTxCount = 946728933,
-            .dTxRate  = 6.569290261471664,
+            // Data from RPC: getchaintxstats 1100 000000003a969c048f616ac606c32c353bc56726e5e826e55fcd671d15823f4c
+            .nTime    = 1786413506,
+            .tx_count = 769251,
+            .dTxRate  = 0.007130644283826844,
         };
     }
 };
@@ -194,23 +200,24 @@ public:
         m_chain_type = ChainType::TESTNET;
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
-        consensus.nSubsidyHalvingInterval = 210000;
+        consensus.tailEmissionBlockHeight = 420480;
         consensus.script_flag_exceptions.emplace( // BIP16 exception
-            uint256S("0x00000000dd30457c001f4095d208cc1296b0eed002427aa599874af7a432b105"), SCRIPT_VERIFY_NONE);
-        consensus.BIP34Height = 21111;
-        consensus.BIP34Hash = uint256S("0x0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8");
-        consensus.BIP65Height = 581885; // 00000000007f6655f22f98e72ed80d8b06dc761d5da09df0fa1dc4be4f861eb6
-        consensus.BIP66Height = 330776; // 000000002104c8c45e99a8853285a3b592602a3ccde2b832481da85e9e4ba182
-        consensus.CSVHeight = 770112; // 00000000025e930139bac5c6c31a403776da130831ab85be56578f3fa75369bb
-        consensus.SegwitHeight = 834624; // 00000000002b980fcd729daaa248fd9316a5200e9b367f4ff2c42453e84201ca
-        consensus.MinBIP9WarningHeight = 836640; // segwit activation height + miner confirmation window
-        consensus.powLimit = uint256S("00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
-        consensus.nPowTargetSpacing = 10 * 60;
+            uint256{"00000000dd30457c001f4095d208cc1296b0eed002427aa599874af7a432b105"}, SCRIPT_VERIFY_NONE);
+        consensus.BIP34Height = 0;
+        consensus.BIP34Hash = uint256{"0000000023b3a96d3484e5abb3755c413e7d41500f8e2a5c3f0dd01299cd8ef8"};
+        consensus.BIP65Height = 0; // 00000000007f6655f22f98e72ed80d8b06dc761d5da09df0fa1dc4be4f861eb6
+        consensus.BIP66Height = 0; // 000000002104c8c45e99a8853285a3b592602a3ccde2b832481da85e9e4ba182
+        consensus.CSVHeight = 0; // 00000000025e930139bac5c6c31a403776da130831ab85be56578f3fa75369bb
+        consensus.SegwitHeight = 0; // 00000000002b980fcd729daaa248fd9316a5200e9b367f4ff2c42453e84201ca
+        consensus.MinBIP9WarningHeight = 24; // segwit activation height + miner confirmation window
+        consensus.powLimit = uint256{"0000ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        consensus.nPowTargetTimespan = 2 * 60 * 60; // two weeks
+        consensus.nPowTargetSpacing = 5 * 60;
         consensus.fPowAllowMinDifficultyBlocks = true;
+        consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;
-        consensus.nRuleChangeActivationThreshold = 1512; // 75% for testchains
-        consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
+        consensus.nRuleChangeActivationThreshold = 22; // 75% for testchains
+        consensus.nMinerConfirmationWindow = 24; // nPowTargetTimespan / nPowTargetSpacing
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
@@ -222,30 +229,28 @@ public:
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = 1628640000; // August 11th, 2021
         consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 0; // No activation delay
 
-        consensus.nMinimumChainWork = uint256S("0x000000000000000000000000000000000000000000000c59b14e264ba6c15db9");
-        consensus.defaultAssumeValid = uint256S("0x000000000001323071f38f21ea5aae529ece491eadaccce506a59bcc2d968917"); // 2550000
+        consensus.nMinimumChainWork = uint256{
+            "0000000000000000000000000000000000000000000000000000000000000000"
+        };
+        consensus.defaultAssumeValid = uint256{"000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"}; // 2550000
 
         pchMessageStart[0] = 0x0b;
         pchMessageStart[1] = 0x11;
         pchMessageStart[2] = 0x09;
-        pchMessageStart[3] = 0x07;
+        pchMessageStart[3] = 0x3a;
         nDefaultPort = 18333;
         nPruneAfterHeight = 1000;
-        m_assumed_blockchain_size = 42;
-        m_assumed_chain_state_size = 3;
+        m_assumed_blockchain_size = 200;
+        m_assumed_chain_state_size = 19;
 
-        genesis = CreateGenesisBlock(1296688602, 414098458, 0x1d00ffff, 1, 50 * COIN);
+        genesis = CreateGenesisBlock(1720471420, 2157475185, 0x1f00ffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"));
-        assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+        // assert(consensus.hashGenesisBlock == uint256S("0x007a91ae5fb2380bd8da591eccadaa4030bf4f84240089eba2a460bedcc3b723"));
+        // assert(genesis.hashMerkleRoot == uint256S("0x5b53a050a9980529aacc59a2e30e15f7540b6021d06da511d87e3e3d0e4f7644"));
 
         vFixedSeeds.clear();
         vSeeds.clear();
         // nodes with support for servicebits filtering should be at the top
-        vSeeds.emplace_back("testnet-seed.bitcoin.jonasschnelli.ch.");
-        vSeeds.emplace_back("seed.tbtc.petertodd.net.");
-        vSeeds.emplace_back("seed.testnet.bitcoin.sprovoost.nl.");
-        vSeeds.emplace_back("testnet-seed.bluematt.me."); // Just a static list of stable node(s), only supports x9
 
         base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
         base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
@@ -262,24 +267,116 @@ public:
 
         checkpointData = {
             {
-                {546, uint256S("000000002a936ca763904c3c35fce2f3556c559c0214345d31b1bcebf76acb70")},
+                {0, uint256{"000000000933ea01ad0ee984209779baaec3ced90fa3f408719526f8d77f4943"}},
             }
         };
 
         m_assumeutxo_data = {
-            {
-                .height = 2'500'000,
-                .hash_serialized = AssumeutxoHash{uint256S("0xf841584909f68e47897952345234e37fcd9128cd818f41ee6c3ca68db8071be7")},
-                .nChainTx = 66484552,
-                .blockhash = uint256S("0x0000000000000093bcb68c03a9a168ae252572d348a2eaeba2cdf9231d73206f")
-            }
         };
 
         chainTxData = ChainTxData{
-            // Data from RPC: getchaintxstats 4096 000000000001323071f38f21ea5aae529ece491eadaccce506a59bcc2d968917
-            .nTime    = 1703579240,
-            .nTxCount = 67845391,
-            .dTxRate  = 1.464436832560951,
+            // Data from RPC: getchaintxstats 4096 00000000000003fc7967410ba2d0a8a8d50daedc318d43e8baf1a9782c236a57
+            .nTime    = 1741042082,
+            .tx_count = 475477615,
+            .dTxRate  = 17.15933950357594,
+        };
+    }
+};
+
+/**
+ * Testnet (v4): public test network which is reset from time to time.
+ */
+class CTestNet4Params : public CChainParams {
+public:
+    CTestNet4Params() {
+        m_chain_type = ChainType::TESTNET4;
+        consensus.signet_blocks = false;
+        consensus.signet_challenge.clear();
+        consensus.BIP34Height = 1;
+        consensus.BIP34Hash = uint256{};
+        consensus.BIP65Height = 1;
+        consensus.BIP66Height = 1;
+        consensus.CSVHeight = 1;
+        consensus.SegwitHeight = 1;
+        consensus.MinBIP9WarningHeight = 0;
+        consensus.powLimit = uint256{"00000000ffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
+        consensus.nPowTargetSpacing = 10 * 60;
+        consensus.fPowAllowMinDifficultyBlocks = true;
+        consensus.enforce_BIP94 = true;
+        consensus.fPowNoRetargeting = false;
+        consensus.nRuleChangeActivationThreshold = 1512; // 75% for testchains
+        consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
+        consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
+        consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].min_activation_height = 0; // No activation delay
+
+        // Deployment of Taproot (BIPs 340-342)
+        consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].bit = 2;
+        consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nStartTime = Consensus::BIP9Deployment::ALWAYS_ACTIVE;
+        consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
+        consensus.vDeployments[Consensus::DEPLOYMENT_TAPROOT].min_activation_height = 0; // No activation delay
+
+        consensus.nMinimumChainWork = uint256{"0000000000000000000000000000000000000000000001d6dce8651b6094e4c1"};
+        consensus.defaultAssumeValid = uint256{"0000000000003ed4f08dbdf6f7d6b271a6bcffce25675cb40aa9fa43179a89f3"}; // 72600
+
+        pchMessageStart[0] = 0x1c;
+        pchMessageStart[1] = 0x16;
+        pchMessageStart[2] = 0x3f;
+        pchMessageStart[3] = 0x28;
+        nDefaultPort = 48333;
+        nPruneAfterHeight = 1000;
+        m_assumed_blockchain_size = 11;
+        m_assumed_chain_state_size = 1;
+
+        const char* testnet4_genesis_msg = "03/May/2024 000000000000000000001ebd58c244970b3aa9d783bb001011fbe8ea8e98e00e";
+        const CScript testnet4_genesis_script = CScript() << "000000000000000000000000000000000000000000000000000000000000000000"_hex << OP_CHECKSIG;
+        genesis = CreateGenesisBlock(testnet4_genesis_msg,
+                testnet4_genesis_script,
+                1714777860,
+                393743547,
+                0x1d00ffff,
+                1,
+                50 * COIN);
+        consensus.hashGenesisBlock = genesis.GetHash();
+        // assert(consensus.hashGenesisBlock == uint256{"00000000da84f2bafbbc53dee25a72ae507ff4914b867c565be350b0da8bf043"});
+        // assert(genesis.hashMerkleRoot == uint256{"7aa0a7ae1e223414cb807e40cd57e667b718e42aaf9306db9102fe28912b7b4e"});
+
+        vFixedSeeds.clear();
+        vSeeds.clear();
+        // nodes with support for servicebits filtering should be at the top
+        //vSeeds.emplace_back("seed.testnet4.bitcoin.sprovoost.nl."); // Sjors Provoost
+        //vSeeds.emplace_back("seed.testnet4.wiz.biz."); // Jason Maurice
+
+        base58Prefixes[PUBKEY_ADDRESS] = std::vector<unsigned char>(1,111);
+        base58Prefixes[SCRIPT_ADDRESS] = std::vector<unsigned char>(1,196);
+        base58Prefixes[SECRET_KEY] =     std::vector<unsigned char>(1,239);
+        base58Prefixes[EXT_PUBLIC_KEY] = {0x04, 0x35, 0x87, 0xCF};
+        base58Prefixes[EXT_SECRET_KEY] = {0x04, 0x35, 0x83, 0x94};
+
+        bech32_hrp = "tb";
+
+        //vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_testnet4), std::end(chainparams_seed_testnet4));
+
+        fDefaultConsistencyChecks = false;
+        m_is_mockable_chain = false;
+
+        checkpointData = {
+            {
+                {},
+            }
+        };
+
+        m_assumeutxo_data = {
+            {}
+        };
+
+        chainTxData = ChainTxData{
+            // Data from RPC: getchaintxstats 4096 0000000000003ed4f08dbdf6f7d6b271a6bcffce25675cb40aa9fa43179a89f3
+            .nTime    = 1741070246,
+            .tx_count = 7653966,
+            .dTxRate  = 1.239174414591965,
         };
     }
 };
@@ -292,25 +389,24 @@ public:
     explicit SigNetParams(const SigNetOptions& options)
     {
         std::vector<uint8_t> bin;
+        vFixedSeeds.clear();
         vSeeds.clear();
 
         if (!options.challenge) {
-            bin = ParseHex("512103ad5e0edad18cb1f0fc0d28a3d4f1f3e445640337489abb10404f2d1e086be430210359ef5021964fe22d6f8e05b2463c9540ce96883fe3b278760f048f5189f2e6c452ae");
+            bin = "512103ad5e0edad18cb1f0fc0d28a3d4f1f3e445640337489abb10404f2d1e086be430210359ef5021964fe22d6f8e05b2463c9540ce96883fe3b278760f048f5189f2e6c452ae"_hex_v_u8;
+            //vFixedSeeds = std::vector<uint8_t>(std::begin(chainparams_seed_signet), std::end(chainparams_seed_signet));
             vSeeds.emplace_back("seed.signet.bitcoin.sprovoost.nl.");
+            vSeeds.emplace_back("seed.signet.achownodes.xyz."); // Ava Chow, only supports x1, x5, x9, x49, x809, x849, xd, x400, x404, x408, x448, xc08, xc48, x40c
 
-            // Hardcoded nodes can be removed once there are more DNS seeds
-            vSeeds.emplace_back("178.128.221.177");
-            vSeeds.emplace_back("v7ajjeirttkbnt32wpy3c6w3emwnfr3fkla7hpxcfokr3ysd3kqtzmqd.onion:38333");
-
-            consensus.nMinimumChainWork = uint256S("0x00000000000000000000000000000000000000000000000000000206e86f08e8");
-            consensus.defaultAssumeValid = uint256S("0x0000000870f15246ba23c16e370a7ffb1fc8a3dcf8cb4492882ed4b0e3d4cd26"); // 180000
-            m_assumed_blockchain_size = 1;
-            m_assumed_chain_state_size = 0;
+            consensus.nMinimumChainWork = uint256{"000000000000000000000000000000000000000000000000000002b517f3d1a1"};
+            consensus.defaultAssumeValid = uint256{"000000895a110f46e59eb82bbc5bfb67fa314656009c295509c21b4999f5180a"}; // 237722
+            m_assumed_blockchain_size = 9;
+            m_assumed_chain_state_size = 1;
             chainTxData = ChainTxData{
-                // Data from RPC: getchaintxstats 4096 0000000870f15246ba23c16e370a7ffb1fc8a3dcf8cb4492882ed4b0e3d4cd26
-                .nTime    = 1706331472,
-                .nTxCount = 2425380,
-                .dTxRate  = 0.008277759863833788,
+                // Data from RPC: getchaintxstats 4096 000000895a110f46e59eb82bbc5bfb67fa314656009c295509c21b4999f5180a
+                .nTime    = 1741019645,
+                .tx_count = 16540736,
+                .dTxRate  = 1.064918879911595,
             };
         } else {
             bin = *options.challenge;
@@ -333,7 +429,7 @@ public:
         m_chain_type = ChainType::SIGNET;
         consensus.signet_blocks = true;
         consensus.signet_challenge.assign(bin.begin(), bin.end());
-        consensus.nSubsidyHalvingInterval = 210000;
+        consensus.tailEmissionBlockHeight = 210000;
         consensus.BIP34Height = 1;
         consensus.BIP34Hash = uint256{};
         consensus.BIP65Height = 1;
@@ -343,11 +439,12 @@ public:
         consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
         consensus.nPowTargetSpacing = 10 * 60;
         consensus.fPowAllowMinDifficultyBlocks = false;
+        consensus.enforce_BIP94 = false;
         consensus.fPowNoRetargeting = false;
         consensus.nRuleChangeActivationThreshold = 1815; // 90% of 2016
         consensus.nMinerConfirmationWindow = 2016; // nPowTargetTimespan / nPowTargetSpacing
         consensus.MinBIP9WarningHeight = 0;
-        consensus.powLimit = uint256S("00000377ae000000000000000000000000000000000000000000000000000000");
+        consensus.powLimit = uint256{"00000377ae000000000000000000000000000000000000000000000000000000"};
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].bit = 28;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nStartTime = Consensus::BIP9Deployment::NEVER_ACTIVE;
         consensus.vDeployments[Consensus::DEPLOYMENT_TESTDUMMY].nTimeout = Consensus::BIP9Deployment::NO_TIMEOUT;
@@ -370,17 +467,17 @@ public:
 
         genesis = CreateGenesisBlock(1598918400, 52613770, 0x1e0377ae, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6"));
-        assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+        // assert(consensus.hashGenesisBlock == uint256S("0x00000008819873e925422c1ff0f99f7cc9bbb232af63a077a480a3633bee1ef6"));
+        // assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
 
         vFixedSeeds.clear();
 
         m_assumeutxo_data = {
             {
                 .height = 160'000,
-                .hash_serialized = AssumeutxoHash{uint256S("0xfe0a44309b74d6b5883d246cb419c6221bcccf0b308c9b59b7d70783dbdf928a")},
-                .nChainTx = 2289496,
-                .blockhash = uint256S("0x0000003ca3c99aff040f2563c2ad8f8ec88bd0fd6b8f0895cfaf1ef90353a62c")
+                .hash_serialized = AssumeutxoHash{uint256{"fe0a44309b74d6b5883d246cb419c6221bcccf0b308c9b59b7d70783dbdf928a"}},
+                .m_chain_tx_count = 2289496,
+                .blockhash = consteval_ctor(uint256{"0000003ca3c99aff040f2563c2ad8f8ec88bd0fd6b8f0895cfaf1ef90353a62c"}),
             }
         };
 
@@ -409,7 +506,7 @@ public:
         m_chain_type = ChainType::REGTEST;
         consensus.signet_blocks = false;
         consensus.signet_challenge.clear();
-        consensus.nSubsidyHalvingInterval = 150;
+        consensus.tailEmissionBlockHeight = 150;
         consensus.BIP34Height = 1; // Always active unless overridden
         consensus.BIP34Hash = uint256();
         consensus.BIP65Height = 1;  // Always active unless overridden
@@ -417,10 +514,11 @@ public:
         consensus.CSVHeight = 1;    // Always active unless overridden
         consensus.SegwitHeight = 0; // Always active unless overridden
         consensus.MinBIP9WarningHeight = 0;
-        consensus.powLimit = uint256S("7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
-        consensus.nPowTargetTimespan = 14 * 24 * 60 * 60; // two weeks
+        consensus.powLimit = uint256{"7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"};
+        consensus.nPowTargetTimespan = 24 * 60 * 60; // one day
         consensus.nPowTargetSpacing = 10 * 60;
         consensus.fPowAllowMinDifficultyBlocks = true;
+        consensus.enforce_BIP94 = opts.enforce_bip94;
         consensus.fPowNoRetargeting = true;
         consensus.nRuleChangeActivationThreshold = 108; // 75% for testchains
         consensus.nMinerConfirmationWindow = 144; // Faster than normal for regtest (144 instead of 2016)
@@ -475,8 +573,8 @@ public:
 
         genesis = CreateGenesisBlock(1296688602, 2, 0x207fffff, 1, 50 * COIN);
         consensus.hashGenesisBlock = genesis.GetHash();
-        assert(consensus.hashGenesisBlock == uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
-        assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
+        // assert(consensus.hashGenesisBlock == uint256S("0x0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"));
+        // assert(genesis.hashMerkleRoot == uint256S("0x4a5e1e4baab89f3a32518a88c31bc87f618f76673e2cc77ab2127b7afdeda33b"));
 
         vFixedSeeds.clear(); //!< Regtest mode doesn't have any fixed seeds.
         vSeeds.clear();
@@ -487,23 +585,30 @@ public:
 
         checkpointData = {
             {
-                {0, uint256S("0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206")},
+                {0, uint256{"0f9188f13cb7b2c71f2a335e3a4fc328bf5beb436012afca590b1a11466e2206"}},
             }
         };
 
         m_assumeutxo_data = {
-            {
+            {   // For use by unit tests
                 .height = 110,
-                .hash_serialized = AssumeutxoHash{uint256S("0x6657b736d4fe4db0cbc796789e812d5dba7f5c143764b1b6905612f1830609d1")},
-                .nChainTx = 111,
-                .blockhash = uint256S("0x696e92821f65549c7ee134edceeeeaaa4105647a3c4fd9f298c0aec0ab50425c")
+                .hash_serialized = AssumeutxoHash{uint256{"6657b736d4fe4db0cbc796789e812d5dba7f5c143764b1b6905612f1830609d1"}},
+                .m_chain_tx_count = 111,
+                .blockhash = consteval_ctor(uint256{"696e92821f65549c7ee134edceeeeaaa4105647a3c4fd9f298c0aec0ab50425c"}),
+            },
+            {
+                // For use by fuzz target src/test/fuzz/utxo_snapshot.cpp
+                .height = 200,
+                .hash_serialized = AssumeutxoHash{uint256{"4f34d431c3e482f6b0d67b64609ece3964dc8d7976d02ac68dd7c9c1421738f2"}},
+                .m_chain_tx_count = 201,
+                .blockhash = consteval_ctor(uint256{"5e93653318f294fb5aa339d00bbf8cf1c3515488ad99412c37608b139ea63b27"}),
             },
             {
                 // For use by test/functional/feature_assumeutxo.py
                 .height = 299,
-                .hash_serialized = AssumeutxoHash{uint256S("0xa4bf3407ccb2cc0145c49ebba8fa91199f8a3903daf0883875941497d2493c27")},
-                .nChainTx = 334,
-                .blockhash = uint256S("0x3bb7ce5eba0be48939b7a521ac1ba9316afee2c7bada3a0cca24188e6d7d96c0")
+                .hash_serialized = AssumeutxoHash{uint256{"a4bf3407ccb2cc0145c49ebba8fa91199f8a3903daf0883875941497d2493c27"}},
+                .m_chain_tx_count = 334,
+                .blockhash = consteval_ctor(uint256{"3bb7ce5eba0be48939b7a521ac1ba9316afee2c7bada3a0cca24188e6d7d96c0"}),
             },
         };
 
@@ -543,6 +648,11 @@ std::unique_ptr<const CChainParams> CChainParams::TestNet()
     return std::make_unique<const CTestNetParams>();
 }
 
+std::unique_ptr<const CChainParams> CChainParams::TestNet4()
+{
+    return std::make_unique<const CTestNet4Params>();
+}
+
 std::vector<int> CChainParams::GetAvailableSnapshotHeights() const
 {
     std::vector<int> heights;
@@ -558,16 +668,19 @@ std::optional<ChainType> GetNetworkForMagic(const MessageStartChars& message)
 {
     const auto mainnet_msg = CChainParams::Main()->MessageStart();
     const auto testnet_msg = CChainParams::TestNet()->MessageStart();
+    const auto testnet4_msg = CChainParams::TestNet4()->MessageStart();
     const auto regtest_msg = CChainParams::RegTest({})->MessageStart();
     const auto signet_msg = CChainParams::SigNet({})->MessageStart();
 
-    if (std::equal(message.begin(), message.end(), mainnet_msg.data())) {
+    if (std::ranges::equal(message, mainnet_msg)) {
         return ChainType::MAIN;
-    } else if (std::equal(message.begin(), message.end(), testnet_msg.data())) {
+    } else if (std::ranges::equal(message, testnet_msg)) {
         return ChainType::TESTNET;
-    } else if (std::equal(message.begin(), message.end(), regtest_msg.data())) {
+    } else if (std::ranges::equal(message, testnet4_msg)) {
+        return ChainType::TESTNET4;
+    } else if (std::ranges::equal(message, regtest_msg)) {
         return ChainType::REGTEST;
-    } else if (std::equal(message.begin(), message.end(), signet_msg.data())) {
+    } else if (std::ranges::equal(message, signet_msg)) {
         return ChainType::SIGNET;
     }
     return std::nullopt;

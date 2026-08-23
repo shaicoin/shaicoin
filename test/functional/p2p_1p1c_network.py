@@ -13,9 +13,11 @@ from decimal import Decimal
 from math import ceil
 
 from test_framework.mempool_util import (
+    DEFAULT_MIN_RELAY_TX_FEE,
     fill_mempool,
 )
 from test_framework.messages import (
+    COIN,
     msg_tx,
 )
 from test_framework.p2p import (
@@ -30,9 +32,6 @@ from test_framework.wallet import (
     MiniWallet,
     MiniWalletMode,
 )
-
-# 1sat/vB feerate denominated in BTC/KvB
-FEERATE_1SAT_VB = Decimal("0.00001000")
 
 class PackageRelayTest(BitcoinTestFramework):
     def set_test_params(self):
@@ -49,17 +48,14 @@ class PackageRelayTest(BitcoinTestFramework):
     def raise_network_minfee(self):
         fill_mempool(self, self.nodes[0])
 
-        self.log.debug("Wait for the network to sync mempools")
-        self.sync_mempools()
-
         self.log.debug("Check that all nodes' mempool minimum feerates are above min relay feerate")
         for node in self.nodes:
-            assert_equal(node.getmempoolinfo()['minrelaytxfee'], FEERATE_1SAT_VB)
-            assert_greater_than(node.getmempoolinfo()['mempoolminfee'], FEERATE_1SAT_VB)
+            assert_equal(node.getmempoolinfo()['minrelaytxfee'], Decimal(DEFAULT_MIN_RELAY_TX_FEE) / COIN)
+            assert_greater_than(node.getmempoolinfo()['mempoolminfee'], Decimal(DEFAULT_MIN_RELAY_TX_FEE) / COIN)
 
     def create_basic_1p1c(self, wallet):
-        low_fee_parent = wallet.create_self_transfer(fee_rate=FEERATE_1SAT_VB, confirmed_only=True)
-        high_fee_child = wallet.create_self_transfer(utxo_to_spend=low_fee_parent["new_utxo"], fee_rate=999*FEERATE_1SAT_VB)
+        low_fee_parent = wallet.create_self_transfer(fee_rate=Decimal(DEFAULT_MIN_RELAY_TX_FEE) / COIN, confirmed_only=True)
+        high_fee_child = wallet.create_self_transfer(utxo_to_spend=low_fee_parent["new_utxo"], fee_rate=999*Decimal(DEFAULT_MIN_RELAY_TX_FEE)/ COIN)
         package_hex_basic = [low_fee_parent["hex"], high_fee_child["hex"]]
         return package_hex_basic, low_fee_parent["tx"], high_fee_child["tx"]
 
@@ -90,8 +86,8 @@ class PackageRelayTest(BitcoinTestFramework):
         return [low_fee_parent_2outs["hex"], high_fee_child_2outs["hex"]], low_fee_parent_2outs["tx"], high_fee_child_2outs["tx"]
 
     def create_package_2p1c(self, wallet):
-        parent1 = wallet.create_self_transfer(fee_rate=FEERATE_1SAT_VB*10, confirmed_only=True)
-        parent2 = wallet.create_self_transfer(fee_rate=FEERATE_1SAT_VB*20, confirmed_only=True)
+        parent1 = wallet.create_self_transfer(fee_rate=Decimal(DEFAULT_MIN_RELAY_TX_FEE) / COIN * 10, confirmed_only=True)
+        parent2 = wallet.create_self_transfer(fee_rate=Decimal(DEFAULT_MIN_RELAY_TX_FEE) / COIN * 20, confirmed_only=True)
         child = wallet.create_self_transfer_multi(
             utxos_to_spend=[parent1["new_utxo"], parent2["new_utxo"]],
             fee_per_output=999*parent1["tx"].get_vsize(),
@@ -107,7 +103,7 @@ class PackageRelayTest(BitcoinTestFramework):
 
         # 3: 2-parent-1-child package. Both parents are above mempool min feerate. No package submission happens.
         # We require packages to be child-with-unconfirmed-parents and only allow 1-parent-1-child packages.
-        package_hex_3, parent_31, parent_32, child_3 = self.create_package_2p1c(self.wallet)
+        package_hex_3, parent_31, _parent_32, child_3 = self.create_package_2p1c(self.wallet)
 
         # 4: parent + child package where the child spends 2 different outputs from the parent.
         package_hex_4, parent_4, child_4 = self.create_package_2outs(self.wallet)
@@ -146,12 +142,11 @@ class PackageRelayTest(BitcoinTestFramework):
         for (i, peer) in enumerate(self.peers):
             for tx in transactions_to_presend[i]:
                 peer.send_and_ping(msg_tx(tx))
-            # This disconnect removes any sent orphans from the orphanage (EraseForPeer) and times
-            # out the in-flight requests.  It is currently required for the test to pass right now,
-            # because the node will not reconsider an orphan tx and will not (re)try requesting
-            # orphan parents from multiple peers if the first one didn't respond.
-            # TODO: remove this in the future if the node tries orphan resolution with multiple peers.
-            peer.peer_disconnect()
+
+        # Disconnect python peers to clear outstanding orphan requests with them, avoiding timeouts.
+        # We are only interested in the syncing behavior between real nodes.
+        for i in range(self.num_nodes):
+            self.nodes[i].disconnect_p2ps()
 
         self.log.info("Submit full packages to node0")
         for package_hex in packages_to_submit:
@@ -159,8 +154,8 @@ class PackageRelayTest(BitcoinTestFramework):
             assert_equal(submitpackage_result["package_msg"], "success")
 
         self.log.info("Wait for mempools to sync")
-        self.sync_mempools(timeout=20)
+        self.sync_mempools()
 
 
 if __name__ == '__main__':
-    PackageRelayTest().main()
+    PackageRelayTest(__file__).main()

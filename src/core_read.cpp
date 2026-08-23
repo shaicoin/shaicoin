@@ -39,7 +39,7 @@ public:
             }
             mapOpNames[strName] = static_cast<opcodetype>(op);
             // Convenience: OP_ADD and just ADD are both recognized:
-            if (strName.compare(0, 3, "OP_") == 0) { // strName starts with "OP_"
+            if (strName.starts_with("OP_")) {
                 mapOpNames[strName.substr(3)] = static_cast<opcodetype>(op);
             }
         }
@@ -234,18 +234,9 @@ bool DecodeHexBlk(CBlock& block, const std::string& strHexBlk)
     return true;
 }
 
-bool ParseHashStr(const std::string& strHex, uint256& result)
-{
-    if ((strHex.size() != 64) || !IsHex(strHex))
-        return false;
-
-    result.SetHex(strHex);
-    return true;
-}
-
 util::Result<int> SighashFromStr(const std::string& sighash)
 {
-    static std::map<std::string, int> map_sighash_values = {
+    static const std::map<std::string, int> map_sighash_values = {
         {std::string("DEFAULT"), int(SIGHASH_DEFAULT)},
         {std::string("ALL"), int(SIGHASH_ALL)},
         {std::string("ALL|ANYONECANPAY"), int(SIGHASH_ALL|SIGHASH_ANYONECANPAY)},

@@ -2,7 +2,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <qt/sendcoinsdialog.h>
 #include <qt/forms/ui_sendcoinsdialog.h>
@@ -33,6 +33,7 @@
 #include <fstream>
 #include <memory>
 
+#include <QDebug>
 #include <QFontMetrics>
 #include <QScrollBar>
 #include <QSettings>
@@ -210,7 +211,7 @@ void SendCoinsDialog::setModel(WalletModel *_model)
             }
         } else if (model->wallet().privateKeysDisabled()) {
             ui->sendButton->setText(tr("Cr&eate Unsigned"));
-            ui->sendButton->setToolTip(tr("Creates a Partially Signed Bitcoin Transaction (PSBT) for use with e.g. an offline %1 wallet, or a PSBT-compatible hardware wallet.").arg(PACKAGE_NAME));
+            ui->sendButton->setToolTip(tr("Creates a Partially Signed Bitcoin Transaction (PSBT) for use with e.g. an offline %1 wallet, or a PSBT-compatible hardware wallet.").arg(CLIENT_NAME));
         }
 
         // set the smartfee-sliders default value (wallets default conf.target or last stored value)
@@ -332,12 +333,12 @@ bool SendCoinsDialog::PrepareSendText(QString& question_string, QString& informa
         /*: Text to inform a user attempting to create a transaction of their current options. At this stage,
             a user can only create a PSBT. This string is displayed when private keys are disabled and an external
             signer is not available. */
-        question_string.append(tr("Please, review your transaction proposal. This will produce a Partially Signed Bitcoin Transaction (PSBT) which you can save or copy and then sign with e.g. an offline %1 wallet, or a PSBT-compatible hardware wallet.").arg(PACKAGE_NAME));
+        question_string.append(tr("Please, review your transaction proposal. This will produce a Partially Signed Bitcoin Transaction (PSBT) which you can save or copy and then sign with e.g. an offline %1 wallet, or a PSBT-compatible hardware wallet.").arg(CLIENT_NAME));
     } else if (model->getOptionsModel()->getEnablePSBTControls()) {
         /*: Text to inform a user attempting to create a transaction of their current options. At this stage,
             a user can send their transaction or create a PSBT. This string is displayed when both private keys
             and PSBT controls are enabled. */
-        question_string.append(tr("Please, review your transaction. You can create and send this transaction or create a Partially Signed Bitcoin Transaction (PSBT), which you can save or copy and then sign with, e.g., an offline %1 wallet, or a PSBT-compatible hardware wallet.").arg(PACKAGE_NAME));
+        question_string.append(tr("Please, review your transaction. You can create and send this transaction or create a Partially Signed Bitcoin Transaction (PSBT), which you can save or copy and then sign with, e.g., an offline %1 wallet, or a PSBT-compatible hardware wallet.").arg(CLIENT_NAME));
     } else {
         /*: Text to prompt a user to review the details of the transaction they are attempting to send. */
         question_string.append(tr("Please, review your transaction."));
@@ -464,7 +465,7 @@ bool SendCoinsDialog::signWithExternalSigner(PartiallySignedTransaction& psbtx, 
         return false;
     }
     if (err) {
-        tfm::format(std::cerr, "Failed to sign PSBT");
+        qWarning() << "Failed to sign PSBT";
         processSendCoinsReturn(WalletModel::TransactionCreationFailed);
         return false;
     }
@@ -851,6 +852,10 @@ void SendCoinsDialog::updateCoinControlState()
 }
 
 void SendCoinsDialog::updateNumberOfBlocks(int count, const QDateTime& blockDate, double nVerificationProgress, SyncType synctype, SynchronizationState sync_state) {
+    // During shutdown, clientModel will be nullptr. Attempting to update views at this point may cause a crash
+    // due to accessing backend models that might no longer exist.
+    if (!clientModel) return;
+    // Process event
     if (sync_state == SynchronizationState::POST_INIT) {
         updateSmartFeeLabel();
     }

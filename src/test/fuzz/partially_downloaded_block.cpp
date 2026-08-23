@@ -11,6 +11,7 @@
 #include <test/util/txmempool.h>
 #include <txmempool.h>
 #include <util/check.h>
+#include <util/time.h>
 #include <util/translation.h>
 
 #include <cstddef>
@@ -44,7 +45,9 @@ PartiallyDownloadedBlock::CheckBlockFn FuzzedCheckBlock(std::optional<BlockValid
 
 FUZZ_TARGET(partially_downloaded_block, .init = initialize_pdb)
 {
+    SeedRandomStateForTest(SeedRand::ZEROS);
     FuzzedDataProvider fuzzed_data_provider{buffer.data(), buffer.size()};
+    SetMockTime(ConsumeTime(fuzzed_data_provider));
 
     auto block{ConsumeDeserializable<CBlock>(fuzzed_data_provider, TX_WITH_WITNESS)};
     if (!block || block->vtx.size() == 0 ||
@@ -52,7 +55,7 @@ FUZZ_TARGET(partially_downloaded_block, .init = initialize_pdb)
         return;
     }
 
-    CBlockHeaderAndShortTxIDs cmpctblock{*block};
+    CBlockHeaderAndShortTxIDs cmpctblock{*block, fuzzed_data_provider.ConsumeIntegral<uint64_t>()};
 
     bilingual_str error;
     CTxMemPool pool{MemPoolOptionsForTest(g_setup->m_node), error};
@@ -78,7 +81,7 @@ FUZZ_TARGET(partially_downloaded_block, .init = initialize_pdb)
 
         if (add_to_mempool && !pool.exists(GenTxid::Txid(tx->GetHash()))) {
             LOCK2(cs_main, pool.cs);
-            pool.addUnchecked(ConsumeTxMemPoolEntry(fuzzed_data_provider, *tx));
+            AddToMempool(pool, ConsumeTxMemPoolEntry(fuzzed_data_provider, *tx));
             available.insert(i);
         }
     }
@@ -114,7 +117,6 @@ FUZZ_TARGET(partially_downloaded_block, .init = initialize_pdb)
         fuzzed_data_provider.PickValueInArray(
             {BlockValidationResult::BLOCK_RESULT_UNSET,
              BlockValidationResult::BLOCK_CONSENSUS,
-             BlockValidationResult::BLOCK_RECENT_CONSENSUS_CHANGE,
              BlockValidationResult::BLOCK_CACHED_INVALID,
              BlockValidationResult::BLOCK_INVALID_HEADER,
              BlockValidationResult::BLOCK_MUTATED,

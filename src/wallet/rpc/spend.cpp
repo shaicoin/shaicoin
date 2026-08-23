@@ -24,7 +24,7 @@
 #include <univalue.h>
 
 using common::FeeModeFromString;
-using common::FeeModes;
+using common::FeeModesDetail;
 using common::InvalidEstimateModeErrorMessage;
 using common::StringForFeeReason;
 using common::TransactionErrorString;
@@ -68,29 +68,26 @@ std::set<int> InterpretSubtractFeeFromOutputInstructions(const UniValue& sffo_in
 {
     std::set<int> sffo_set;
     if (sffo_instructions.isNull()) return sffo_set;
-    if (sffo_instructions.isBool()) {
-        if (sffo_instructions.get_bool()) sffo_set.insert(0);
-        return sffo_set;
-    }
+
     for (const auto& sffo : sffo_instructions.getValues()) {
+        int pos{-1};
         if (sffo.isStr()) {
-            for (size_t i = 0; i < destinations.size(); ++i) {
-                if (sffo.get_str() == destinations.at(i)) {
-                    sffo_set.insert(i);
-                    break;
-                }
-            }
+            auto it = find(destinations.begin(), destinations.end(), sffo.get_str());
+            if (it == destinations.end()) throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', destination %s not found in tx outputs", sffo.get_str()));
+            pos = it - destinations.begin();
+        } else if (sffo.isNum()) {
+            pos = sffo.getInt<int>();
+        } else {
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', invalid value type: %s", uvTypeName(sffo.type())));
         }
-        if (sffo.isNum()) {
-            int pos = sffo.getInt<int>();
-            if (sffo_set.contains(pos))
-                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, duplicated position: %d", pos));
-            if (pos < 0)
-                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, negative position: %d", pos));
-            if (pos >= int(destinations.size()))
-                throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter, position too large: %d", pos));
-            sffo_set.insert(pos);
-        }
+
+        if (sffo_set.contains(pos))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', duplicated position: %d", pos));
+        if (pos < 0)
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', negative position: %d", pos));
+        if (pos >= int(destinations.size()))
+            throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Invalid parameter 'subtract fee from output', position too large: %d", pos));
+        sffo_set.insert(pos);
     }
     return sffo_set;
 }
@@ -245,7 +242,7 @@ RPCHelpMan sendtoaddress()
                     {"replaceable", RPCArg::Type::BOOL, RPCArg::DefaultHint{"wallet default"}, "Signal that this transaction can be replaced by a transaction (BIP 125)"},
                     {"conf_target", RPCArg::Type::NUM, RPCArg::DefaultHint{"wallet -txconfirmtarget"}, "Confirmation target in blocks"},
                     {"estimate_mode", RPCArg::Type::STR, RPCArg::Default{"unset"}, "The fee estimate mode, must be one of (case insensitive):\n"
-                     "\"" + FeeModes("\"\n\"") + "\""},
+                      + FeeModesDetail(std::string("economical mode is used if the transaction is replaceable;\notherwise, conservative mode is used"))},
                     {"avoid_reuse", RPCArg::Type::BOOL, RPCArg::Default{true}, "(only available if avoid_reuse wallet flag is set) Avoid spending from dirty addresses; addresses are considered\n"
                                          "dirty if they have previously been used in a transaction. If true, this also activates avoidpartialspends, grouping outputs by their addresses."},
                     {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_ATOM + "/vB."},
@@ -310,10 +307,13 @@ RPCHelpMan sendtoaddress()
     UniValue address_amounts(UniValue::VOBJ);
     const std::string address = request.params[0].get_str();
     address_amounts.pushKV(address, request.params[1]);
-    std::vector<CRecipient> recipients = CreateRecipients(
-            ParseOutputs(address_amounts),
-            InterpretSubtractFeeFromOutputInstructions(request.params[4], address_amounts.getKeys())
-    );
+
+    std::set<int> sffo_set;
+    if (!request.params[4].isNull() && request.params[4].get_bool()) {
+        sffo_set.insert(0);
+    }
+
+    std::vector<CRecipient> recipients{CreateRecipients(ParseOutputs(address_amounts), sffo_set)};
     const bool verbose{request.params[10].isNull() ? false : request.params[10].get_bool()};
 
     return SendMoney(*pwallet, coin_control, recipients, mapValue, verbose);
@@ -349,7 +349,7 @@ RPCHelpMan sendmany()
                     {"replaceable", RPCArg::Type::BOOL, RPCArg::DefaultHint{"wallet default"}, "Signal that this transaction can be replaced by a transaction (BIP 125)"},
                     {"conf_target", RPCArg::Type::NUM, RPCArg::DefaultHint{"wallet -txconfirmtarget"}, "Confirmation target in blocks"},
                     {"estimate_mode", RPCArg::Type::STR, RPCArg::Default{"unset"}, "The fee estimate mode, must be one of (case insensitive):\n"
-                     "\"" + FeeModes("\"\n\"") + "\""},
+                      + FeeModesDetail(std::string("economical mode is used if the transaction is replaceable;\notherwise, conservative mode is used"))},
                     {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_ATOM + "/vB."},
                     {"verbose", RPCArg::Type::BOOL, RPCArg::Default{false}, "If true, return extra information about the transaction."},
                 },
@@ -463,7 +463,7 @@ static std::vector<RPCArg> FundTxDoc(bool solving_data = true)
     std::vector<RPCArg> args = {
         {"conf_target", RPCArg::Type::NUM, RPCArg::DefaultHint{"wallet -txconfirmtarget"}, "Confirmation target in blocks", RPCArgOptions{.also_positional = true}},
         {"estimate_mode", RPCArg::Type::STR, RPCArg::Default{"unset"}, "The fee estimate mode, must be one of (case insensitive):\n"
-         "\"" + FeeModes("\"\n\"") + "\"", RPCArgOptions{.also_positional = true}},
+          + FeeModesDetail(std::string("economical mode is used if the transaction is replaceable;\notherwise, conservative mode is used")), RPCArgOptions{.also_positional = true}},
         {
             "replaceable", RPCArg::Type::BOOL, RPCArg::DefaultHint{"wallet default"}, "Marks this transaction as BIP125-replaceable.\n"
             "Allows this transaction to be replaced by a transaction with higher fees"
@@ -542,6 +542,7 @@ CreatedTransactionResult FundTransaction(CWallet& wallet, const CMutableTransact
                 {"minconf", UniValueType(UniValue::VNUM)},
                 {"maxconf", UniValueType(UniValue::VNUM)},
                 {"input_weights", UniValueType(UniValue::VARR)},
+                {"max_tx_weight", UniValueType(UniValue::VNUM)},
             },
             true, true);
 
@@ -660,11 +661,13 @@ CreatedTransactionResult FundTransaction(CWallet& wallet, const CMutableTransact
                 FlatSigningProvider desc_out;
                 std::string error;
                 std::vector<CScript> scripts_temp;
-                std::unique_ptr<Descriptor> desc = Parse(desc_str, desc_out, error, true);
-                if (!desc) {
+                auto descs = Parse(desc_str, desc_out, error, true);
+                if (descs.empty()) {
                     throw JSONRPCError(RPC_INVALID_PARAMETER, strprintf("Unable to parse descriptor '%s': %s", desc_str, error));
                 }
-                desc->Expand(0, desc_out, scripts_temp, desc_out);
+                for (auto& desc : descs) {
+                    desc->Expand(0, desc_out, scripts_temp, desc_out);
+                }
                 coinControl.m_external_provider.Merge(std::move(desc_out));
             }
         }
@@ -699,6 +702,10 @@ CreatedTransactionResult FundTransaction(CWallet& wallet, const CMutableTransact
 
             coinControl.SetInputWeight(COutPoint(txid, vout), weight);
         }
+    }
+
+    if (options.exists("max_tx_weight")) {
+        coinControl.m_max_tx_weight = options["max_tx_weight"].getInt<int>();
     }
 
     if (recipients.empty())
@@ -742,7 +749,10 @@ RPCHelpMan fundrawtransaction()
                 "Note that all inputs selected must be of standard form and P2SH scripts must be\n"
                 "in the wallet using importaddress or addmultisigaddress (to calculate fees).\n"
                 "You can see whether this is the case by checking the \"solvable\" field in the listunspent output.\n"
-                "Only pay-to-pubkey, multisig, and P2SH versions thereof are currently supported for watch-only\n",
+                "Only pay-to-pubkey, multisig, and P2SH versions thereof are currently supported for watch-only.\n"
+                "Note that if specifying an exact fee rate, the resulting transaction may have a higher fee rate\n"
+                "if the transaction has unconfirmed inputs. This is because the wallet will attempt to make the\n"
+                "entire package have the given fee rate, not the resulting transaction.\n",
                 {
                     {"hexstring", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The hex string of the raw transaction"},
                     {"options", RPCArg::Type::OBJ_NAMED_PARAMS, RPCArg::Optional::OMITTED, "For backward compatibility: passing in a true instead of an object will result in {\"includeWatching\":true}",
@@ -786,6 +796,8 @@ RPCHelpMan fundrawtransaction()
                                     },
                                 },
                              },
+                            {"max_tx_weight", RPCArg::Type::NUM, RPCArg::Default{MAX_STANDARD_TX_WEIGHT}, "The maximum acceptable transaction weight.\n"
+                                                          "Transaction building will fail if this can not be satisfied."},
                         },
                         FundTxDoc()),
                         RPCArgOptions{
@@ -875,7 +887,7 @@ RPCHelpMan signrawtransactionwithwallet()
                                 {
                                     {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
                                     {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
-                                    {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "script key"},
+                                    {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The output script"},
                                     {"redeemScript", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "(required for P2SH) redeem script"},
                                     {"witnessScript", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "(required for P2WSH or P2SH-P2WSH) witness script"},
                                     {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "(required for Segwit inputs) the amount spent"},
@@ -1011,7 +1023,7 @@ static RPCHelpMan bumpfee_helper(std::string method_name)
                              "still be replaceable in practice, for example if it has unconfirmed ancestors which\n"
                              "are replaceable).\n"},
                     {"estimate_mode", RPCArg::Type::STR, RPCArg::Default{"unset"}, "The fee estimate mode, must be one of (case insensitive):\n"
-                             "\"" + FeeModes("\"\n\"") + "\""},
+                              + FeeModesDetail(std::string("economical mode is used if the transaction is replaceable;\notherwise, conservative mode is used"))},
                     {"outputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "The outputs specified as key-value pairs.\n"
                              "Each key may only appear once, i.e. there can only be one 'data' output, and no address may be duplicated.\n"
                              "At least one output of either type must be specified.\n"
@@ -1198,7 +1210,7 @@ RPCHelpMan send()
                 RPCArgOptions{.skip_type_check = true}},
             {"conf_target", RPCArg::Type::NUM, RPCArg::DefaultHint{"wallet -txconfirmtarget"}, "Confirmation target in blocks"},
             {"estimate_mode", RPCArg::Type::STR, RPCArg::Default{"unset"}, "The fee estimate mode, must be one of (case insensitive):\n"
-             "\"" + FeeModes("\"\n\"") + "\""},
+              + FeeModesDetail(std::string("economical mode is used if the transaction is replaceable;\notherwise, conservative mode is used"))},
             {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_ATOM + "/vB."},
             {"options", RPCArg::Type::OBJ_NAMED_PARAMS, RPCArg::Optional::OMITTED, "",
                 Cat<std::vector<RPCArg>>(
@@ -1217,16 +1229,18 @@ RPCHelpMan send()
                     {"include_watching", RPCArg::Type::BOOL, RPCArg::DefaultHint{"true for watch-only wallets, otherwise false"}, "Also select inputs which are watch only.\n"
                                           "Only solvable inputs can be used. Watch-only destinations are solvable if the public key and/or output script was imported,\n"
                                           "e.g. with 'importpubkey' or 'importmulti' with the 'pubkeys' or 'desc' field."},
-                    {"inputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "Specify inputs instead of adding them automatically. A JSON array of JSON objects",
+                    {"inputs", RPCArg::Type::ARR, RPCArg::Default{UniValue::VARR}, "Specify inputs instead of adding them automatically.",
                         {
+                          {"", RPCArg::Type::OBJ, RPCArg::Optional::OMITTED, "", {
                             {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
                             {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
-                            {"sequence", RPCArg::Type::NUM, RPCArg::Optional::NO, "The sequence number"},
+                            {"sequence", RPCArg::Type::NUM, RPCArg::DefaultHint{"depends on the value of the 'replaceable' and 'locktime' arguments"}, "The sequence number"},
                             {"weight", RPCArg::Type::NUM, RPCArg::DefaultHint{"Calculated from wallet and solving data"}, "The maximum weight for this input, "
                                         "including the weight of the outpoint and sequence number. "
                                         "Note that signature sizes are not guaranteed to be consistent, "
                                         "so the maximum DER signatures size of 73 bytes should be used when considering ECDSA signatures."
                                         "Remember to convert serialized sizes to weight units when necessary."},
+                          }},
                         },
                     },
                     {"locktime", RPCArg::Type::NUM, RPCArg::Default{0}, "Raw locktime. Non-0 value also locktime-activates inputs"},
@@ -1240,6 +1254,8 @@ RPCHelpMan send()
                             {"vout_index", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, "The zero-based output index, before a change output is added."},
                         },
                     },
+                    {"max_tx_weight", RPCArg::Type::NUM, RPCArg::Default{MAX_STANDARD_TX_WEIGHT}, "The maximum acceptable transaction weight.\n"
+                                                  "Transaction building will fail if this can not be satisfied."},
                 },
                 FundTxDoc()),
                 RPCArgOptions{.oneline_description="options"}},
@@ -1287,6 +1303,9 @@ RPCHelpMan send()
             // Automatically select coins, unless at least one is manually selected. Can
             // be overridden by options.add_inputs.
             coin_control.m_allow_other_inputs = rawTx.vin.size() == 0;
+            if (options.exists("max_tx_weight")) {
+                coin_control.m_max_tx_weight = options["max_tx_weight"].getInt<int>();
+            }
             SetOptionsInputWeights(options["inputs"], options);
             // Clear tx.vout since it is not meant to be used now that we are passing outputs directly.
             // This sets us up for a future PR to completely remove tx from the function signature in favor of passing inputs directly
@@ -1319,7 +1338,7 @@ RPCHelpMan sendall()
             },
             {"conf_target", RPCArg::Type::NUM, RPCArg::DefaultHint{"wallet -txconfirmtarget"}, "Confirmation target in blocks"},
             {"estimate_mode", RPCArg::Type::STR, RPCArg::Default{"unset"}, "The fee estimate mode, must be one of (case insensitive):\n"
-             "\"" + FeeModes("\"\n\"") + "\""},
+              + FeeModesDetail(std::string("economical mode is used if the transaction is replaceable;\notherwise, conservative mode is used"))},
             {"fee_rate", RPCArg::Type::AMOUNT, RPCArg::DefaultHint{"not set, fall back to wallet fee estimation"}, "Specify a fee rate in " + CURRENCY_ATOM + "/vB."},
             {
                 "options", RPCArg::Type::OBJ_NAMED_PARAMS, RPCArg::Optional::OMITTED, "",
@@ -1697,6 +1716,8 @@ RPCHelpMan walletcreatefundedpsbt()
                                     {"vout_index", RPCArg::Type::NUM, RPCArg::Optional::OMITTED, "The zero-based output index, before a change output is added."},
                                 },
                             },
+                            {"max_tx_weight", RPCArg::Type::NUM, RPCArg::Default{MAX_STANDARD_TX_WEIGHT}, "The maximum acceptable transaction weight.\n"
+                                                          "Transaction building will fail if this can not be satisfied."},
                         },
                         FundTxDoc()),
                         RPCArgOptions{.oneline_description="options"}},

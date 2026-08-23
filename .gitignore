@@ -1,4 +1,12 @@
-*.tar.gz
+# Build subdirectories.
+/*build*
+!/build-aux
+!/build_msvc
+
+.vscode/
+**/.vscode
+.DS_Store
+**/.DS_Store
 
 *.exe
 *.pdb
@@ -14,6 +22,15 @@ src/bitcoin-wallet
 src/test/fuzz/fuzz
 src/test/test_bitcoin
 src/qt/test/test_bitcoin-qt
+
+src/shaicoind
+src/shaicoin-cli
+src/shaicoin-gui
+src/shaicoin-node
+src/shaicoin-tx
+src/shaicoin-util
+src/shaicoin-chainstate
+src/shaicoin-wallet
 
 # autoreconf
 Makefile.in
@@ -65,87 +82,38 @@ src/qt/bitcoin-qt.includes
 *.rej
 *.orig
 *.pyc
-*.o
-*.o-*
-*.a
-*.pb.cc
-*.pb.h
-*.dat
-
-*.log
-*.trs
-*.zip
-
-*.json.h
-*.raw.h
 
 # Only ignore unexpected patches
 *.patch
 !contrib/guix/patches/*.patch
 !depends/patches/**/*.patch
 
-#libtool object files
-*.lo
-*.la
-
-# Compilation and Qt preprocessor part
-*.qm
-Makefile
-!depends/Makefile
-src/qt/bitcoin-qt
-Bitcoin-Qt.app
-
-# Qt Creator
-Makefile.am.user
-
-# Unit-tests
-Makefile.test
-bitcoin-qt_test
-
-# Resources cpp
-qrc_*.cpp
-
-# Mac specific
-.DS_Store
-build
+/CMakeUserPresets.json
 
 # Previous releases
-releases
-
-#lcov
-*.gcno
-*.gcda
-/*.info
-test_bitcoin.coverage/
-total.coverage/
-fuzz.coverage/
-coverage_percent.txt
-/cov_tool_wrapper.sh
-qa-assets/
+/releases
 
 #build tests
-linux-coverage-build
-linux-build
-win32-build
-test/config.ini
-test/cache/*
-test/.mypy_cache/
 test/lint/test_runner/target/
-
-!src/leveldb*/Makefile
-
-/doc/doxygen/
-
-contrib/devtools/split-debug.sh
-
-# Output from running db4 installation
-db4/
-
-# clang-check
-*.plist
-
-dist/
 
 /guix-build-*
 
 /ci/scratch/
+
+contrib/randomx-fork-test/config.json
+contrib/randomx-fork-test/snapshot/
+contrib/randomx-fork-test/ztest1/
+contrib/randomx-fork-test/ztest2/
+contrib/randomx-fork-test/ztest3/
+contrib/randomx-fork-test/ztest-reports/
+/ztest1/
+/ztest2/
+/ztest3/
+/ztest-reports/
+
+
+
+Makefile
+doc/man/Makefile
+src/Makefile
+test/config.ini

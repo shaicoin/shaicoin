@@ -99,7 +99,6 @@ class BIP68_112_113Test(BitcoinTestFramework):
         self.noban_tx_relay = True
         self.extra_args = [[
             f'-testactivationheight=csv@{CSV_ACTIVATION_HEIGHT}',
-            '-par=1',  # Use only one script thread to get the exact reject reason for testing
         ]]
         self.supports_cli = False
 
@@ -482,4 +481,4 @@ class BIP68_112_113Test(BitcoinTestFramework):
 
 
 if __name__ == '__main__':
-    BIP68_112_113Test().main()
+    BIP68_112_113Test(__file__).main()

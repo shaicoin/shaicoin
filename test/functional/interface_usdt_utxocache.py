@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Copyright (c) 2022 The Bitcoin Core developers
+# Copyright (c) 2022-present The Bitcoin Core developers
 # Distributed under the MIT software license, see the accompanying
 # file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -15,7 +15,10 @@ except ImportError:
     pass
 from test_framework.messages import COIN
 from test_framework.test_framework import BitcoinTestFramework
-from test_framework.util import assert_equal
+from test_framework.util import (
+    assert_equal,
+    bpf_cflags,
+)
 from test_framework.wallet import MiniWallet
 
 utxocache_changes_program = """
@@ -35,7 +38,9 @@ struct utxocache_change
 BPF_PERF_OUTPUT(utxocache_add);
 int trace_utxocache_add(struct pt_regs *ctx) {
     struct utxocache_change add = {};
-    bpf_usdt_readarg_p(1, ctx, &add.txid, 32);
+    void *ptxid = NULL;
+    bpf_usdt_readarg(1, ctx, &ptxid);
+    bpf_probe_read_user(&add.txid, sizeof(add.txid), ptxid);
     bpf_usdt_readarg(2, ctx, &add.index);
     bpf_usdt_readarg(3, ctx, &add.height);
     bpf_usdt_readarg(4, ctx, &add.value);
@@ -47,7 +52,9 @@ int trace_utxocache_add(struct pt_regs *ctx) {
 BPF_PERF_OUTPUT(utxocache_spent);
 int trace_utxocache_spent(struct pt_regs *ctx) {
     struct utxocache_change spent = {};
-    bpf_usdt_readarg_p(1, ctx, &spent.txid, 32);
+    void *ptxid = NULL;
+    bpf_usdt_readarg(1, ctx, &ptxid);
+    bpf_probe_read_user(&spent.txid, sizeof(spent.txid), ptxid);
     bpf_usdt_readarg(2, ctx, &spent.index);
     bpf_usdt_readarg(3, ctx, &spent.height);
     bpf_usdt_readarg(4, ctx, &spent.value);
@@ -59,7 +66,9 @@ int trace_utxocache_spent(struct pt_regs *ctx) {
 BPF_PERF_OUTPUT(utxocache_uncache);
 int trace_utxocache_uncache(struct pt_regs *ctx) {
     struct utxocache_change uncache = {};
-    bpf_usdt_readarg_p(1, ctx, &uncache.txid, 32);
+    void *ptxid = NULL;
+    bpf_usdt_readarg(1, ctx, &ptxid);
+    bpf_probe_read_user(&uncache.txid, sizeof(uncache.txid), ptxid);
     bpf_usdt_readarg(2, ctx, &uncache.index);
     bpf_usdt_readarg(3, ctx, &uncache.height);
     bpf_usdt_readarg(4, ctx, &uncache.value);
@@ -175,7 +184,7 @@ class UTXOCacheTracepointTest(BitcoinTestFramework):
         ctx = USDT(pid=self.nodes[0].process.pid)
         ctx.enable_probe(probe="utxocache:uncache",
                          fn_name="trace_utxocache_uncache")
-        bpf = BPF(text=utxocache_changes_program, usdt_contexts=[ctx], debug=0, cflags=["-Wno-error=implicit-function-declaration"])
+        bpf = BPF(text=utxocache_changes_program, usdt_contexts=[ctx], debug=0, cflags=bpf_cflags())
 
         # The handle_* function is a ctypes callback function called from C. When
         # we assert in the handle_* function, the AssertError doesn't propagate
@@ -244,7 +253,7 @@ class UTXOCacheTracepointTest(BitcoinTestFramework):
         ctx.enable_probe(probe="utxocache:add", fn_name="trace_utxocache_add")
         ctx.enable_probe(probe="utxocache:spent",
                          fn_name="trace_utxocache_spent")
-        bpf = BPF(text=utxocache_changes_program, usdt_contexts=[ctx], debug=0, cflags=["-Wno-error=implicit-function-declaration"])
+        bpf = BPF(text=utxocache_changes_program, usdt_contexts=[ctx], debug=0, cflags=bpf_cflags())
 
         # The handle_* function is a ctypes callback function called from C. When
         # we assert in the handle_* function, the AssertError doesn't propagate
@@ -333,7 +342,7 @@ class UTXOCacheTracepointTest(BitcoinTestFramework):
         ctx = USDT(pid=self.nodes[0].process.pid)
         ctx.enable_probe(probe="utxocache:flush",
                          fn_name="trace_utxocache_flush")
-        bpf = BPF(text=utxocache_flushes_program, usdt_contexts=[ctx], debug=0, cflags=["-Wno-error=implicit-function-declaration"])
+        bpf = BPF(text=utxocache_flushes_program, usdt_contexts=[ctx], debug=0, cflags=bpf_cflags())
 
         # The handle_* function is a ctypes callback function called from C. When
         # we assert in the handle_* function, the AssertError doesn't propagate
@@ -390,10 +399,10 @@ class UTXOCacheTracepointTest(BitcoinTestFramework):
         ctx = USDT(pid=self.nodes[0].process.pid)
         ctx.enable_probe(probe="utxocache:flush",
                          fn_name="trace_utxocache_flush")
-        bpf = BPF(text=utxocache_flushes_program, usdt_contexts=[ctx], debug=0, cflags=["-Wno-error=implicit-function-declaration"])
+        bpf = BPF(text=utxocache_flushes_program, usdt_contexts=[ctx], debug=0, cflags=bpf_cflags())
         bpf["utxocache_flush"].open_perf_buffer(handle_utxocache_flush)
 
-        self.log.info(f"prune blockchain to trigger a flush for pruning")
+        self.log.info("prune blockchain to trigger a flush for pruning")
         expected_flushes.append({"mode": "NONE", "for_prune": True, "size": 0})
         self.nodes[0].pruneblockchain(315)
 
@@ -401,10 +410,10 @@ class UTXOCacheTracepointTest(BitcoinTestFramework):
         bpf.cleanup()
 
         self.log.info(
-            f"check that we don't expect additional flushes and that the handle_* function succeeded")
+            "check that we don't expect additional flushes and that the handle_* function succeeded")
         assert_equal(0, len(expected_flushes))
         assert_equal(EXPECTED_HANDLE_FLUSH_SUCCESS, handle_flush_succeeds)
 
 
 if __name__ == '__main__':
-    UTXOCacheTracepointTest().main()
+    UTXOCacheTracepointTest(__file__).main()

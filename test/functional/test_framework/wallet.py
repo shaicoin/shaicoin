@@ -7,7 +7,6 @@
 from copy import deepcopy
 from decimal import Decimal
 from enum import Enum
-import math
 from typing import (
     Any,
     Optional,
@@ -35,11 +34,9 @@ from test_framework.messages import (
     CTxOut,
     hash256,
     ser_compact_size,
-    WITNESS_SCALE_FACTOR,
 )
 from test_framework.script import (
     CScript,
-    LEAF_VERSION_TAPSCRIPT,
     OP_1,
     OP_NOP,
     OP_RETURN,
@@ -106,8 +103,8 @@ class MiniWallet:
             pub_key = self._priv_key.get_pubkey()
             self._scriptPubKey = key_to_p2pk_script(pub_key.get_bytes())
         elif mode == MiniWalletMode.ADDRESS_OP_TRUE:
-            internal_key = None if tag_name is None else hash256(tag_name.encode())
-            self._address, self._internal_key = create_deterministic_address_bcrt1_p2tr_op_true(internal_key)
+            internal_key = None if tag_name is None else compute_xonly_pubkey(hash256(tag_name.encode()))[0]
+            self._address, self._taproot_info = create_deterministic_address_bcrt1_p2tr_op_true(internal_key)
             self._scriptPubKey = address_to_scriptpubkey(self._address)
 
         # When the pre-mined test framework chain is used, it contains coinbase
@@ -120,20 +117,21 @@ class MiniWallet:
     def _create_utxo(self, *, txid, vout, value, height, coinbase, confirmations):
         return {"txid": txid, "vout": vout, "value": value, "height": height, "coinbase": coinbase, "confirmations": confirmations}
 
-    def _bulk_tx(self, tx, target_weight):
-        """Pad a transaction with extra outputs until it reaches a target weight (or higher).
+    def _bulk_tx(self, tx, target_vsize):
+        """Pad a transaction with extra outputs until it reaches a target vsize.
         returns the tx
         """
+        if target_vsize < tx.get_vsize():
+            raise RuntimeError(f"target_vsize {target_vsize} is less than transaction virtual size {tx.get_vsize()}")
+
         tx.vout.append(CTxOut(nValue=0, scriptPubKey=CScript([OP_RETURN])))
-        # determine number of needed padding bytes by converting weight difference to vbytes
-        dummy_vbytes = (target_weight - tx.get_weight() + 3) // 4
+        # determine number of needed padding bytes
+        dummy_vbytes = target_vsize - tx.get_vsize()
         # compensate for the increase of the compact-size encoded script length
         # (note that the length encoding of the unpadded output script needs one byte)
         dummy_vbytes -= len(ser_compact_size(dummy_vbytes)) - 1
         tx.vout[-1].scriptPubKey = CScript([OP_RETURN] + [OP_1] * dummy_vbytes)
-        # Actual weight should be at most 3 higher than target weight
-        assert_greater_than_or_equal(tx.get_weight(), target_weight)
-        assert_greater_than_or_equal(target_weight + 3, tx.get_weight())
+        assert_equal(tx.get_vsize(), target_vsize)
 
     def get_balance(self):
         return sum(u['value'] for u in self._utxos)
@@ -195,7 +193,12 @@ class MiniWallet:
         elif self._mode == MiniWalletMode.ADDRESS_OP_TRUE:
             tx.wit.vtxinwit = [CTxInWitness()] * len(tx.vin)
             for i in tx.wit.vtxinwit:
-                i.scriptWitness.stack = [CScript([OP_TRUE]), bytes([LEAF_VERSION_TAPSCRIPT]) + self._internal_key]
+                assert_equal(len(self._taproot_info.leaves), 1)
+                leaf_info = list(self._taproot_info.leaves.values())[0]
+                i.scriptWitness.stack = [
+                    leaf_info.script,
+                    bytes([leaf_info.version | self._taproot_info.negflag]) + self._taproot_info.internal_pubkey,
+                ]
         else:
             assert False
 
@@ -212,7 +215,7 @@ class MiniWallet:
         self.rescan_utxos()
         return blocks
 
-    def get_scriptPubKey(self):
+    def get_output_script(self):
         return self._scriptPubKey
 
     def get_descriptor(self):
@@ -305,7 +308,7 @@ class MiniWallet:
         locktime=0,
         sequence=0,
         fee_per_output=1000,
-        target_weight=0,
+        target_vsize=0,
         confirmed_only=False,
     ):
         """
@@ -334,8 +337,8 @@ class MiniWallet:
 
         self.sign_tx(tx)
 
-        if target_weight:
-            self._bulk_tx(tx, target_weight)
+        if target_vsize:
+            self._bulk_tx(tx, target_vsize)
 
         txid = tx.rehash()
         return {
@@ -360,7 +363,7 @@ class MiniWallet:
             fee_rate=Decimal("0.003"),
             fee=Decimal("0"),
             utxo_to_spend=None,
-            target_weight=0,
+            target_vsize=0,
             confirmed_only=False,
             **kwargs,
     ):
@@ -375,20 +378,19 @@ class MiniWallet:
             vsize = Decimal(168)  # P2PK (73 bytes scriptSig + 35 bytes scriptPubKey + 60 bytes other)
         else:
             assert False
-        if target_weight and not fee:  # respect fee_rate if target weight is passed
-            # the actual weight might be off by 3 WUs, so calculate based on that (see self._bulk_tx)
-            max_actual_weight = target_weight + 3
-            fee = get_fee(math.ceil(max_actual_weight / WITNESS_SCALE_FACTOR), fee_rate)
+        if target_vsize and not fee:  # respect fee_rate if target vsize is passed
+            fee = get_fee(target_vsize, fee_rate)
         send_value = utxo_to_spend["value"] - (fee or (fee_rate * vsize / 1000))
-
+        if send_value <= 0:
+            raise RuntimeError(f"UTXO value {utxo_to_spend['value']} is too small to cover fees {(fee or (fee_rate * vsize / 1000))}")
         # create tx
         tx = self.create_self_transfer_multi(
             utxos_to_spend=[utxo_to_spend],
             amount_per_output=int(COIN * send_value),
-            target_weight=target_weight,
+            target_vsize=target_vsize,
             **kwargs,
         )
-        if not target_weight:
+        if not target_vsize:
             assert_equal(tx["tx"].get_vsize(), vsize)
         tx["new_utxo"] = tx.pop("new_utxos")[0]
 

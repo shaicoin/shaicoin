@@ -38,17 +38,12 @@ private:
 public:
     /** Fee rate of 0 satoshis per kvB */
     CFeeRate() : nSatoshisPerK(0) { }
-    template<typename I>
+    template<std::integral I> // Disallow silent float -> int conversion
     explicit CFeeRate(const I _nSatoshisPerK): nSatoshisPerK(_nSatoshisPerK) {
-        // We've previously had bugs creep in from silent double->int conversion...
-        static_assert(std::is_integral<I>::value, "CFeeRate should be used without floats");
     }
 
     /**
      * Construct a fee rate from a fee in satoshis and a vsize in vB.
-     *
-     * param@[in]   nFeePaid    The fee paid by a transaction, in satoshis
-     * param@[in]   num_bytes   The vsize of a transaction, in vbytes
      */
     CFeeRate(const CAmount& nFeePaid, uint32_t num_bytes);
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2022 The Bitcoin Core developers
+// Copyright (c) 2019-present The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -17,6 +17,83 @@
 #include <vector>
 
 namespace util {
+namespace detail {
+template <unsigned num_params>
+constexpr static void CheckNumFormatSpecifiers(const char* str)
+{
+    unsigned count_normal{0}; // Number of "normal" specifiers, like %s
+    unsigned count_pos{0};    // Max number in positional specifier, like %8$s
+    for (auto it{str}; *it != '\0'; ++it) {
+        if (*it != '%' || *++it == '%') continue; // Skip escaped %%
+
+        auto add_arg = [&] {
+            unsigned maybe_num{0};
+            while ('0' <= *it && *it <= '9') {
+                maybe_num *= 10;
+                maybe_num += *it - '0';
+                ++it;
+            }
+
+            if (*it == '$') {
+                ++it;
+                // Positional specifier, like %8$s
+                if (maybe_num == 0) throw "Positional format specifier must have position of at least 1";
+                count_pos = std::max(count_pos, maybe_num);
+            } else {
+                // Non-positional specifier, like %s
+                ++count_normal;
+            }
+        };
+
+        // Increase argument count and consume positional specifier, if present.
+        add_arg();
+
+        // Consume flags.
+        while (*it == '#' || *it == '0' || *it == '-' || *it == ' ' || *it == '+') ++it;
+
+        auto parse_size = [&] {
+            if (*it == '*') {
+                ++it;
+                add_arg();
+            } else {
+                while ('0' <= *it && *it <= '9') ++it;
+            }
+        };
+
+        // Consume dynamic or static width value.
+        parse_size();
+
+        // Consume dynamic or static precision value.
+        if (*it == '.') {
+            ++it;
+            parse_size();
+        }
+
+        if (*it == '\0') throw "Format specifier incorrectly terminated by end of string";
+
+        // Length and type in "[flags][width][.precision][length]type"
+        // is not checked. Parsing continues with the next '%'.
+    }
+    if (count_normal && count_pos) throw "Format specifiers must be all positional or all non-positional!";
+    unsigned count{count_normal | count_pos};
+    if (num_params != count) throw "Format specifier count must match the argument count!";
+}
+} // namespace detail
+
+/**
+ * @brief A wrapper for a compile-time partially validated format string
+ *
+ * This struct can be used to enforce partial compile-time validation of format
+ * strings, to reduce the likelihood of tinyformat throwing exceptions at
+ * run-time. Validation is partial to try and prevent the most common errors
+ * while avoiding re-implementing the entire parsing logic.
+ */
+template <unsigned num_params>
+struct ConstevalFormatString {
+    const char* const fmt;
+    consteval ConstevalFormatString(const char* str) : fmt{str} { detail::CheckNumFormatSpecifiers<num_params>(fmt); }
+};
+
 void ReplaceAll(std::string& in_out, const std::string& search, const std::string& substitute);
 
 /** Split a string on any char found in separators, returning a vector.
@@ -79,6 +156,14 @@ std::vector<T> Split(const Span<const char>& sp, char sep)
 [[nodiscard]] inline std::string TrimString(std::string_view str, std::string_view pattern = " \f\n\r\t\v")
 {
     return std::string(TrimStringView(str, pattern));
+}
+
+[[nodiscard]] inline std::string_view RemoveSuffixView(std::string_view str, std::string_view suffix)
+{
+    if (str.ends_with(suffix)) {
+        return str.substr(0, str.size() - suffix.size());
+    }
+    return str;
 }
 
 [[nodiscard]] inline std::string_view RemovePrefixView(std::string_view str, std::string_view prefix)

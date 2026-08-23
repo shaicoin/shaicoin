@@ -5,11 +5,13 @@
 '''
 Script to generate list of seed nodes for kernel/chainparams.cpp.
 
-This script expects two text files in the directory that is passed as an
+This script expects three text files in the directory that is passed as an
 argument:
 
     nodes_main.txt
+    nodes_signet.txt
     nodes_test.txt
+    nodes_testnet4.txt
 
 These files must consist of lines in the format
 
@@ -18,9 +20,9 @@ These files must consist of lines in the format
     <onion>.onion:<port>
     <i2p>.b32.i2p:<port>
 
-The output will be two data structures with the peers in binary format:
+The output will be several data structures with the peers in binary format:
 
-   static const uint8_t chainparams_seed_{main,test}[]={
+   static const uint8_t chainparams_seed_{main,signet,test,testnet4}[]={
    ...
    }
 
@@ -169,8 +171,14 @@ def main():
     with open(os.path.join(indir,'nodes_main.txt'), 'r', encoding="utf8") as f:
         process_nodes(g, f, 'chainparams_seed_main')
     g.write('\n')
+    with open(os.path.join(indir,'nodes_signet.txt'), 'r', encoding="utf8") as f:
+        process_nodes(g, f, 'chainparams_seed_signet')
+    g.write('\n')
     with open(os.path.join(indir,'nodes_test.txt'), 'r', encoding="utf8") as f:
         process_nodes(g, f, 'chainparams_seed_test')
+    g.write('\n')
+    with open(os.path.join(indir,'nodes_testnet4.txt'), 'r', encoding="utf8") as f:
+        process_nodes(g, f, 'chainparams_seed_testnet4')
     g.write('#endif // BITCOIN_CHAINPARAMSSEEDS_H\n')
 
 if __name__ == '__main__':

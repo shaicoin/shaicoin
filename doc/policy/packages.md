@@ -38,16 +38,14 @@ The following rules are enforced for all packages:
 
 * Only limited package replacements are currently considered. (#28984)
 
-   - All direct conflicts must signal replacement (or have `-mempoolfullrbf=1` set).
-
    - Packages are 1-parent-1-child, with no in-mempool ancestors of the package.
 
-   - All conflicting clusters(connected components of mempool transactions) must be clusters of up to size 2.
+   - All conflicting clusters (connected components of mempool transactions) must be clusters of up to size 2.
 
    - No more than MAX_REPLACEMENT_CANDIDATES transactions can be replaced, analogous to
      regular [replacement rule](./mempool-replacements.md) 5).
 
-   - Replacements must pay more total total fees at the incremental relay fee (analogous to
+   - Replacements must pay more total fees at the incremental relay fee (analogous to
      regular [replacement rules](./mempool-replacements.md) 3 and 4).
 
    - Parent feerate must be lower than package feerate.
@@ -56,7 +54,7 @@ The following rules are enforced for all packages:
 
    - *Rationale*: Basic support for package RBF can be used by wallets
      by making chains of no longer than two, then directly conflicting
-     those chains when needed. Combined with V3 transactions this can
+     those chains when needed. Combined with TRUC transactions this can
      result in more robust fee bumping. More general package RBF may be
      enabled in the future.
 
@@ -76,7 +74,7 @@ The following rules are only enforced for packages to be submitted to the mempoo
 enforced for test accepts):
 
 * Packages must be child-with-unconfirmed-parents packages. This also means packages must contain at
-  least 2 transactions. (#22674)
+  least 1 transaction. (#31096)
 
    - *Rationale*: This allows for fee-bumping by CPFP. Allowing multiple parents makes it possible
      to fee-bump a batch of transactions. Restricting packages to a defined topology is easier to

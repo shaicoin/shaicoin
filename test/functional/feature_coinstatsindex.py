@@ -151,7 +151,7 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         # Generate and send a normal tx with two outputs
         tx1 = self.wallet.send_to(
             from_node=node,
-            scriptPubKey=self.wallet.get_scriptPubKey(),
+            scriptPubKey=self.wallet.get_output_script(),
             amount=21 * COIN,
         )
 
@@ -242,6 +242,9 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         res12 = index_node.gettxoutsetinfo('muhash')
         assert_equal(res12, res10)
 
+        self.log.info("Test obtaining info for a non-existent block hash")
+        assert_raises_rpc_error(-5, "Block not found", index_node.gettxoutsetinfo, hash_type="none", hash_or_height="ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", use_index=True)
+
     def _test_use_index_option(self):
         self.log.info("Test use_index option for nodes running the index")
 
@@ -319,6 +322,21 @@ class CoinStatsIndexTest(BitcoinTestFramework):
         res1 = index_node.gettxoutsetinfo(hash_type='muhash', hash_or_height=None, use_index=True)
         assert_equal(res["muhash"], res1["muhash"])
 
+        self.log.info("Test index with an unclean restart after a reorg")
+        self.restart_node(1, extra_args=self.extra_args[1])
+        committed_height = index_node.getblockcount()
+        self.generate(index_node, 2, sync_fun=self.no_op)
+        self.sync_index_node()
+        block2 = index_node.getbestblockhash()
+        index_node.invalidateblock(block2)
+        self.generatetoaddress(index_node, 1, getnewdestination()[2], sync_fun=self.no_op)
+        self.sync_index_node()
+        index_node.kill_process()
+        self.start_node(1, extra_args=self.extra_args[1])
+        self.sync_index_node()
+        # Because of the unclean shutdown above, indexes reset to the point we last committed them to disk.
+        assert_equal(index_node.getindexinfo()['coinstatsindex']['best_block_height'], committed_height)
+
 
 if __name__ == '__main__':
-    CoinStatsIndexTest().main()
+    CoinStatsIndexTest(__file__).main()

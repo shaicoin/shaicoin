@@ -1,16 +1,15 @@
 package=qt
-$(package)_version=5.15.14
+$(package)_version=5.15.16
 $(package)_download_path=https://download.qt.io/official_releases/qt/5.15/$($(package)_version)/submodules
 $(package)_suffix=everywhere-opensource-src-$($(package)_version).tar.xz
 $(package)_file_name=qtbase-$($(package)_suffix)
-$(package)_sha256_hash=500d3b390048e9538c28b5f523dfea6936f9c2e10d24ab46580ff57d430b98be
+$(package)_sha256_hash=b04815058c18058b6ba837206756a2c87d1391f07a0dcb0dd314f970fd041592
 $(package)_linux_dependencies=freetype fontconfig libxcb libxkbcommon libxcb_util libxcb_util_render libxcb_util_keysyms libxcb_util_image libxcb_util_wm
 $(package)_qt_libs=corelib network widgets gui plugins testlib
 $(package)_linguist_tools = lrelease lupdate lconvert
 $(package)_patches = qt.pro
 $(package)_patches += qttools_src.pro
 $(package)_patches += mac-qmake.conf
-$(package)_patches += fix_qt_pkgconfig.patch
 $(package)_patches += no-xlib.patch
 $(package)_patches += dont_hardcode_pwd.patch
 $(package)_patches += qtbase-moc-ignore-gcc-macro.patch
@@ -18,18 +17,17 @@ $(package)_patches += no_warnings_for_symbols.patch
 $(package)_patches += rcc_hardcode_timestamp.patch
 $(package)_patches += duplicate_lcqpafonts.patch
 $(package)_patches += guix_cross_lib_path.patch
-$(package)_patches += fix-macos-linker.patch
 $(package)_patches += memory_resource.patch
 $(package)_patches += clang_18_libpng.patch
 $(package)_patches += utc_from_string_no_optimize.patch
 $(package)_patches += windows_lto.patch
-$(package)_patches += zlib-timebits64.patch
+$(package)_patches += darwin_no_libm.patch
 
 $(package)_qttranslations_file_name=qttranslations-$($(package)_suffix)
-$(package)_qttranslations_sha256_hash=5b94d1a11b566908622fcca2f8b799744d2f8a68da20be4caa5953ed63b10489
+$(package)_qttranslations_sha256_hash=415dbbb82a75dfc9a7be969e743bee54c0e6867be37bce4cf8f03da39f20112a
 
 $(package)_qttools_file_name=qttools-$($(package)_suffix)
-$(package)_qttools_sha256_hash=12061a85baf5f4de8fbc795e1d3872b706f340211b9e70962caeffc6f5e89563
+$(package)_qttools_sha256_hash=1cab11887faca54af59f4995ee435c9ad98d194e9e6889c846692c8b6815fc1c
 
 $(package)_extra_sources  = $($(package)_qttranslations_file_name)
 $(package)_extra_sources += $($(package)_qttools_file_name)
@@ -63,6 +61,7 @@ $(package)_config_opts += -no-mimetype-database
 $(package)_config_opts += -no-mtdev
 $(package)_config_opts += -no-openssl
 $(package)_config_opts += -no-openvg
+$(package)_config_opts += -no-pkg-config
 $(package)_config_opts += -no-reduce-relocations
 $(package)_config_opts += -no-schannel
 $(package)_config_opts += -no-sctp
@@ -83,7 +82,6 @@ $(package)_config_opts += -nomake examples
 $(package)_config_opts += -nomake tests
 $(package)_config_opts += -nomake tools
 $(package)_config_opts += -opensource
-$(package)_config_opts += -pkg-config
 $(package)_config_opts += -prefix $(host_prefix)
 $(package)_config_opts += -qt-libpng
 $(package)_config_opts += -qt-pcre
@@ -223,9 +221,7 @@ endef
 define $(package)_preprocess_cmds
   cp $($(package)_patch_dir)/qt.pro qt.pro && \
   cp $($(package)_patch_dir)/qttools_src.pro qttools/src/src.pro && \
-  patch -p1 -i $($(package)_patch_dir)/fix-macos-linker.patch && \
   patch -p1 -i $($(package)_patch_dir)/dont_hardcode_pwd.patch && \
-  patch -p1 -i $($(package)_patch_dir)/fix_qt_pkgconfig.patch && \
   patch -p1 -i $($(package)_patch_dir)/no-xlib.patch && \
   patch -p1 -i $($(package)_patch_dir)/qtbase-moc-ignore-gcc-macro.patch && \
   patch -p1 -i $($(package)_patch_dir)/memory_resource.patch && \
@@ -236,7 +232,11 @@ define $(package)_preprocess_cmds
   patch -p1 -i $($(package)_patch_dir)/utc_from_string_no_optimize.patch && \
   patch -p1 -i $($(package)_patch_dir)/guix_cross_lib_path.patch && \
   patch -p1 -i $($(package)_patch_dir)/windows_lto.patch && \
+<<<<<<< HEAD
   patch -p1 -i $($(package)_patch_dir)/zlib-timebits64.patch && \
+=======
+  patch -p1 -i $($(package)_patch_dir)/darwin_no_libm.patch && \
+>>>>>>> upstream/29.x
   mkdir -p qtbase/mkspecs/macx-clang-linux &&\
   cp -f qtbase/mkspecs/macx-clang/qplatformdefs.h qtbase/mkspecs/macx-clang-linux/ &&\
   cp -f $($(package)_patch_dir)/mac-qmake.conf qtbase/mkspecs/macx-clang-linux/qmake.conf && \
@@ -263,13 +263,14 @@ define $(package)_build_cmds
   $(MAKE)
 endef
 
+# TODO: Investigate whether specific targets can be used here to minimize the amount of files/components installed.
 define $(package)_stage_cmds
-  $(MAKE) -C qtbase/src INSTALL_ROOT=$($(package)_staging_dir) $(addsuffix -install_subtargets,$(addprefix sub-,$($(package)_qt_libs))) && \
-  $(MAKE) -C qttools/src/linguist INSTALL_ROOT=$($(package)_staging_dir) $(addsuffix -install_subtargets,$(addprefix sub-,$($(package)_linguist_tools))) && \
+  $(MAKE) -C qtbase INSTALL_ROOT=$($(package)_staging_dir) install && \
+  $(MAKE) -C qttools INSTALL_ROOT=$($(package)_staging_dir) install && \
   $(MAKE) -C qttranslations INSTALL_ROOT=$($(package)_staging_dir) install_subtargets
 endef
 
 define $(package)_postprocess_cmds
-  rm -rf native/mkspecs/ native/lib/ lib/cmake/ && \
-  rm -f lib/lib*.la
+  rm -rf doc/ native/lib/ lib/pkgconfig/ && \
+  rm -f lib/lib*.la lib/Qt5*.la
 endef

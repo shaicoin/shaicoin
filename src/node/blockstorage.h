@@ -29,6 +29,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -73,8 +74,11 @@ static const unsigned int UNDOFILE_CHUNK_SIZE = 0x100000; // 1 MiB
 /** The maximum size of a blk?????.dat file (since 0.8) */
 static const unsigned int MAX_BLOCKFILE_SIZE = 0x8000000; // 128 MiB
 
-/** Size of header written by WriteBlockToDisk before a serialized CBlock */
-static constexpr size_t BLOCK_SERIALIZATION_HEADER_SIZE = std::tuple_size_v<MessageStartChars> + sizeof(unsigned int);
+/** Size of header written by WriteBlock before a serialized CBlock (8 bytes) */
+static constexpr size_t BLOCK_SERIALIZATION_HEADER_SIZE{std::tuple_size_v<MessageStartChars> + sizeof(unsigned int)};
+
+/** Total overhead when writing undo data: header (8 bytes) plus checksum (32 bytes) */
+static constexpr size_t UNDO_DATA_DISK_OVERHEAD{BLOCK_SERIALIZATION_HEADER_SIZE + uint256::size()};
 
 // Because validation code takes pointers to the map's CBlockIndex objects, if
 // we ever switch to another associative container, we need to either use a
@@ -160,25 +164,13 @@ private:
      * blockfile info, and checks if there is enough disk space to save the block.
      *
      * The nAddSize argument passed to this function should include not just the size of the serialized CBlock, but also the size of
-     * separator fields which are written before it by WriteBlockToDisk (BLOCK_SERIALIZATION_HEADER_SIZE).
+     * separator fields (BLOCK_SERIALIZATION_HEADER_SIZE).
      */
     [[nodiscard]] FlatFilePos FindNextBlockPos(unsigned int nAddSize, unsigned int nHeight, uint64_t nTime);
     [[nodiscard]] bool FlushChainstateBlockFile(int tip_height);
     bool FindUndoPos(BlockValidationState& state, int nFile, FlatFilePos& pos, unsigned int nAddSize);
 
-    FlatFileSeq BlockFileSeq() const;
-    FlatFileSeq UndoFileSeq() const;
-
     AutoFile OpenUndoFile(const FlatFilePos& pos, bool fReadOnly = false) const;
-
-    /**
-     * Write a block to disk. The pos argument passed to this function is modified by this call. Before this call, it should
-     * point to an unused file location where separator fields will be written, followed by the serialized CBlock data.
-     * After this call, it will point to the beginning of the serialized CBlock data, after the separator fields
-     * (BLOCK_SERIALIZATION_HEADER_SIZE)
-     */
-    bool WriteBlockToDisk(const CBlock& block, FlatFilePos& pos) const;
-    bool UndoWriteToDisk(const CBlockUndo& blockundo, FlatFilePos& pos, const uint256& hashBlock) const;
 
     /* Calculate the block/rev files to delete based on height specified by user with RPC command pruneblockchain */
     void FindFilesToPruneManual(
@@ -243,6 +235,8 @@ private:
 
     const bool m_prune_mode;
 
+    const std::vector<std::byte> m_xor_key;
+
     /** Dirty block index entries. */
     std::set<CBlockIndex*> m_dirty_blockindex;
 
@@ -261,13 +255,13 @@ private:
 
     const kernel::BlockManagerOpts m_opts;
 
+    const FlatFileSeq m_block_file_seq;
+    const FlatFileSeq m_undo_file_seq;
+
 public:
     using Options = kernel::BlockManagerOpts;
 
-    explicit BlockManager(const util::SignalInterrupt& interrupt, Options opts)
-        : m_prune_mode{opts.prune_target > 0},
-          m_opts{std::move(opts)},
-          m_interrupt{interrupt} {}
+    explicit BlockManager(const util::SignalInterrupt& interrupt, Options opts);
 
     const util::SignalInterrupt& m_interrupt;
     std::atomic<bool> m_importing{false};
@@ -317,7 +311,8 @@ public:
      */
     void ScanAndUnlinkAlreadyPrunedFiles() EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
 
-    CBlockIndex* AddToBlockIndex(const CBlockHeader& block, CBlockIndex*& best_header) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    CBlockIndex* AddToBlockIndex(const CBlockHeader& block, CBlockIndex*& best_header, const uint256* override_hash = nullptr) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
+    CBlockIndex* AddToBlockIndex(const CLegacyBlockHeader& block, CBlockIndex*& best_header) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
     /** Create a new block index entry for a given block hash */
     CBlockIndex* InsertBlockIndex(const uint256& hash) EXCLUSIVE_LOCKS_REQUIRED(cs_main);
 
@@ -330,8 +325,10 @@ public:
     /** Get block file info entry for one block file */
     CBlockFileInfo* GetBlockFileInfo(size_t n);
 
-    bool WriteUndoDataForBlock(const CBlockUndo& blockundo, BlockValidationState& state, CBlockIndex& block)
+    bool WriteBlockUndo(const CBlockUndo& blockundo, BlockValidationState& state, CBlockIndex& block)
         EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+
+    bool ReadLegacyBlock(CLegacyBlock& block, const FlatFilePos& pos) const;
 
     /** Store block on disk and update block file statistics.
      *
@@ -341,16 +338,17 @@ public:
      * @returns in case of success, the position to which the block was written to
      *          in case of an error, an empty FlatFilePos
      */
-    FlatFilePos SaveBlockToDisk(const CBlock& block, int nHeight);
+    FlatFilePos WriteBlock(const CBlock& block, int nHeight);
+    FlatFilePos WriteLegacyBlock(const CLegacyBlock& block, int nHeight);
 
     /** Update blockfile info while processing a block during reindex. The block must be available on disk.
      *
      * @param[in]  block        the block being processed
      * @param[in]  nHeight      the height of the block
-     * @param[in]  pos          the position of the serialized CBlock on disk. This is the position returned
-     *                          by WriteBlockToDisk pointing at the CBlock, not the separator fields before it
+     * @param[in]  pos          the position of the serialized CBlock on disk
      */
     void UpdateBlockInfo(const CBlock& block, unsigned int nHeight, const FlatFilePos& pos);
+    void UpdateBlockInfo(const CLegacyBlock& block, unsigned int nHeight, const FlatFilePos& pos);
 
     /** Whether running in -prune mode. */
     [[nodiscard]] bool IsPruneMode() const { return m_prune_mode; }
@@ -372,16 +370,39 @@ public:
     //! (part of the same chain).
     bool CheckBlockDataAvailability(const CBlockIndex& upper_block LIFETIMEBOUND, const CBlockIndex& lower_block LIFETIMEBOUND) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
 
-    //! Find the first stored ancestor of start_block immediately after the last
-    //! pruned ancestor. Return value will never be null. Caller is responsible
-    //! for ensuring that start_block has data is not pruned.
-    const CBlockIndex* GetFirstStoredBlock(const CBlockIndex& start_block LIFETIMEBOUND, const CBlockIndex* lower_block=nullptr) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+    /**
+     * @brief Returns the earliest block with specified `status_mask` flags set after
+     * the latest block _not_ having those flags.
+     *
+     * This function starts from `upper_block`, which must have all
+     * `status_mask` flags set, and iterates backwards through its ancestors. It
+     * continues as long as each block has all `status_mask` flags set, until
+     * reaching the oldest ancestor or `lower_block`.
+     *
+     * @pre `upper_block` must have all `status_mask` flags set.
+     * @pre `lower_block` must be null or an ancestor of `upper_block`
+     *
+     * @param upper_block The starting block for the search, which must have all
+     *                    `status_mask` flags set.
+     * @param status_mask Bitmask specifying required status flags.
+     * @param lower_block The earliest possible block to return. If null, the
+     *                    search can extend to the genesis block.
+     *
+     * @return A non-null pointer to the earliest block between `upper_block`
+     *         and `lower_block`, inclusive, such that every block between the
+     *         returned block and `upper_block` has `status_mask` flags set.
+     */
+    const CBlockIndex* GetFirstBlock(
+        const CBlockIndex& upper_block LIFETIMEBOUND,
+        uint32_t status_mask,
+        const CBlockIndex* lower_block = nullptr
+    ) const EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
 
     /** True if any block files have ever been pruned. */
     bool m_have_pruned = false;
 
     //! Check whether the block associated with this index entry is pruned or not.
-    bool IsBlockPruned(const CBlockIndex& block) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
+    bool IsBlockPruned(const CBlockIndex& block) const EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
 
     //! Create or update a prune lock identified by its name
     void UpdatePruneLock(const std::string& name, const PruneLockInfo& lock_info) EXCLUSIVE_LOCKS_REQUIRED(::cs_main);
@@ -398,16 +419,17 @@ public:
     void UnlinkPrunedFiles(const std::set<int>& setFilesToPrune) const;
 
     /** Functions for disk access for blocks */
-    bool ReadBlockFromDisk(CBlock& block, const FlatFilePos& pos) const;
-    bool ReadBlockFromDisk(CBlock& block, const CBlockIndex& index) const;
-    bool ReadRawBlockFromDisk(std::vector<uint8_t>& block, const FlatFilePos& pos) const;
+    bool ReadBlock(CBlock& block, const FlatFilePos& pos) const;
+    bool ReadBlock(CBlock& block, const CBlockIndex& index) const;
+    bool ReadRawBlock(std::vector<uint8_t>& block, const FlatFilePos& pos) const;
 
-    bool UndoReadFromDisk(CBlockUndo& blockundo, const CBlockIndex& index) const;
+    bool ReadBlockUndo(CBlockUndo& blockundo, const CBlockIndex& index) const;
 
     void CleanupBlockRevFiles() const;
 };
 
-void ImportBlocks(ChainstateManager& chainman, std::vector<fs::path> vImportFiles);
+// Calls ActivateBestChain() even if no blocks are imported.
+void ImportBlocks(ChainstateManager& chainman, std::span<const fs::path> import_paths);
 } // namespace node
 
 #endif // BITCOIN_NODE_BLOCKSTORAGE_H

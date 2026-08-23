@@ -46,11 +46,10 @@ operation.
 
 ## Enabling
 
-By default, the ZeroMQ feature is automatically compiled in if the
-necessary prerequisites are found.  To disable, use --disable-zmq
-during the *configure* step of building bitcoind:
+By default, the ZeroMQ feature is not automatically compiled.
+To enable, use `-DWITH_ZMQ=ON` when configuring the build system:
 
-    $ ./configure --disable-zmq (other options)
+    $ cmake -B build -DWITH_ZMQ=ON
 
 To actually enable operation, one must set the appropriate options on
 the command line or in the configuration file.
@@ -85,7 +84,7 @@ For instance:
     $ bitcoind -zmqpubhashtx=tcp://127.0.0.1:28332 \
                -zmqpubhashtx=tcp://192.168.1.2:28332 \
                -zmqpubhashblock="tcp://[::1]:28333" \
-               -zmqpubrawtx=ipc:///tmp/bitcoind.tx.raw \
+               -zmqpubrawtx=unix:/tmp/bitcoind.tx.raw \
                -zmqpubhashtxhwm=10000
 
 Each PUB notification has a topic and body, where the header
@@ -163,7 +162,7 @@ Note that for `*block` topics, when the block chain tip changes,
 a reorganisation may occur and just the tip will be notified.
 It is up to the subscriber to retrieve the chain from the last known
 block to the new tip. Also note that no notification will occur if the tip
-was in the active chain--as would be the case after calling invalidateblock RPC.
+was in the active chain, as would be the case after calling the `invalidateblock` RPC.
 In contrast, the `sequence` topic publishes all block connections and
 disconnections.
 

@@ -35,6 +35,11 @@ using common::TransactionErrorString;
 using interfaces::FoundBlock;
 using node::TransactionError;
 
+TRACEPOINT_SEMAPHORE(coin_selection, selected_coins);
+TRACEPOINT_SEMAPHORE(coin_selection, normal_create_tx_internal);
+TRACEPOINT_SEMAPHORE(coin_selection, attempting_aps_create_tx);
+TRACEPOINT_SEMAPHORE(coin_selection, aps_create_tx_internal);
+
 namespace wallet {
 static constexpr size_t OUTPUT_GROUP_MAX_ENTRIES{100};
 
@@ -226,7 +231,7 @@ void CoinsResult::Erase(const std::unordered_set<COutPoint, SaltedOutpointHasher
 void CoinsResult::Shuffle(FastRandomContext& rng_fast)
 {
     for (auto& it : coins) {
-        ::Shuffle(it.second.begin(), it.second.end(), rng_fast);
+        std::shuffle(it.second.begin(), it.second.end(), rng_fast);
     }
 }
 
@@ -695,26 +700,35 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
         }
     };
 
-    // Maximum allowed weight
-    int max_inputs_weight = MAX_STANDARD_TX_WEIGHT - (coin_selection_params.tx_noinputs_size * WITNESS_SCALE_FACTOR);
+    // Maximum allowed weight for selected coins.
+    int max_transaction_weight = coin_selection_params.m_max_tx_weight.value_or(MAX_STANDARD_TX_WEIGHT);
+    int tx_weight_no_input = coin_selection_params.tx_noinputs_size * WITNESS_SCALE_FACTOR;
+    int max_selection_weight = max_transaction_weight - tx_weight_no_input;
+    if (max_selection_weight <= 0) {
+        return util::Error{_("Maximum transaction weight is less than transaction weight without inputs")};
+    }
 
     // SFFO frequently causes issues in the context of changeless input sets: skip BnB when SFFO is active
     if (!coin_selection_params.m_subtract_fee_outputs) {
-        if (auto bnb_result{SelectCoinsBnB(groups.positive_group, nTargetValue, coin_selection_params.m_cost_of_change, max_inputs_weight)}) {
+        if (auto bnb_result{SelectCoinsBnB(groups.positive_group, nTargetValue, coin_selection_params.m_cost_of_change, max_selection_weight)}) {
             results.push_back(*bnb_result);
         } else append_error(std::move(bnb_result));
     }
 
-    // As Knapsack and SRD can create change, also deduce change weight.
-    max_inputs_weight -= (coin_selection_params.change_output_size * WITNESS_SCALE_FACTOR);
+    // Deduct change weight because remaining Coin Selection algorithms can create change output
+    int change_outputs_weight = coin_selection_params.change_output_size * WITNESS_SCALE_FACTOR;
+    max_selection_weight -= change_outputs_weight;
+    if (max_selection_weight < 0 && results.empty()) {
+        return util::Error{_("Maximum transaction weight is too low, can not accommodate change output")};
+    }
 
     // The knapsack solver has some legacy behavior where it will spend dust outputs. We retain this behavior, so don't filter for positive only here.
-    if (auto knapsack_result{KnapsackSolver(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, coin_selection_params.rng_fast, max_inputs_weight)}) {
+    if (auto knapsack_result{KnapsackSolver(groups.mixed_group, nTargetValue, coin_selection_params.m_min_change_target, coin_selection_params.rng_fast, max_selection_weight)}) {
         results.push_back(*knapsack_result);
     } else append_error(std::move(knapsack_result));
 
     if (coin_selection_params.m_effective_feerate > CFeeRate{3 * coin_selection_params.m_long_term_feerate}) { // Minimize input set for feerates of at least 3×LTFRE (default: 30 ṩ/vB+)
-        if (auto cg_result{CoinGrinder(groups.positive_group, nTargetValue, coin_selection_params.m_min_change_target, max_inputs_weight)}) {
+        if (auto cg_result{CoinGrinder(groups.positive_group, nTargetValue, coin_selection_params.m_min_change_target, max_selection_weight)}) {
             cg_result->RecalculateWaste(coin_selection_params.min_viable_change, coin_selection_params.m_cost_of_change, coin_selection_params.m_change_fee);
             results.push_back(*cg_result);
         } else {
@@ -722,7 +736,7 @@ util::Result<SelectionResult> ChooseSelectionResult(interfaces::Chain& chain, co
         }
     }
 
-    if (auto srd_result{SelectCoinsSRD(groups.positive_group, nTargetValue, coin_selection_params.m_change_fee, coin_selection_params.rng_fast, max_inputs_weight)}) {
+    if (auto srd_result{SelectCoinsSRD(groups.positive_group, nTargetValue, coin_selection_params.m_change_fee, coin_selection_params.rng_fast, max_selection_weight)}) {
         results.push_back(*srd_result);
     } else append_error(std::move(srd_result));
 
@@ -799,6 +813,13 @@ util::Result<SelectionResult> SelectCoins(const CWallet& wallet, CoinsResult& av
         op_selection_result->RecalculateWaste(coin_selection_params.min_viable_change,
                                                 coin_selection_params.m_cost_of_change,
                                                 coin_selection_params.m_change_fee);
+
+        // Verify we haven't exceeded the maximum allowed weight
+        int max_inputs_weight = coin_selection_params.m_max_tx_weight.value_or(MAX_STANDARD_TX_WEIGHT) - (coin_selection_params.tx_noinputs_size * WITNESS_SCALE_FACTOR);
+        if (op_selection_result->GetWeight() > max_inputs_weight) {
+            return util::Error{_("The combination of the pre-selected inputs and the wallet automatic inputs selection exceeds the transaction maximum weight. "
+                                 "Please try sending a smaller amount or manually consolidating your wallet's UTXOs")};
+        }
     }
     return op_selection_result;
 }
@@ -976,6 +997,16 @@ static void DiscourageFeeSniping(CMutableTransaction& tx, FastRandomContext& rng
     }
 }
 
+size_t GetSerializeSizeForRecipient(const CRecipient& recipient)
+{
+    return ::GetSerializeSize(CTxOut(recipient.nAmount, GetScriptForDestination(recipient.dest)));
+}
+
+bool IsDust(const CRecipient& recipient, const CFeeRate& dustRelayFee)
+{
+    return ::IsDust(CTxOut(recipient.nAmount, GetScriptForDestination(recipient.dest)), dustRelayFee);
+}
+
 static util::Result<CreatedTransactionResult> CreateTransactionInternal(
         CWallet& wallet,
         const std::vector<CRecipient>& vecSend,
@@ -995,15 +1026,27 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     CoinSelectionParams coin_selection_params{rng_fast}; // Parameters for coin selection, init with dummy
     coin_selection_params.m_avoid_partial_spends = coin_control.m_avoid_partial_spends;
     coin_selection_params.m_include_unsafe_inputs = coin_control.m_include_unsafe_inputs;
-
+    coin_selection_params.m_max_tx_weight = coin_control.m_max_tx_weight.value_or(MAX_STANDARD_TX_WEIGHT);
+    int minimum_tx_weight = MIN_STANDARD_TX_NONWITNESS_SIZE * WITNESS_SCALE_FACTOR;
+    if (coin_selection_params.m_max_tx_weight.value() < minimum_tx_weight || coin_selection_params.m_max_tx_weight.value() > MAX_STANDARD_TX_WEIGHT) {
+        return util::Error{strprintf(_("Maximum transaction weight must be between %d and %d"), minimum_tx_weight, MAX_STANDARD_TX_WEIGHT)};
+    }
     // Set the long term feerate estimate to the wallet's consolidate feerate
     coin_selection_params.m_long_term_feerate = wallet.m_consolidate_feerate;
+    // Static vsize overhead + outputs vsize. 4 nVersion, 4 nLocktime, 1 input count, 1 witness overhead (dummy, flag, stack size)
+    coin_selection_params.tx_noinputs_size = 10 + GetSizeOfCompactSize(vecSend.size()); // bytes for output count
 
     CAmount recipients_sum = 0;
     const OutputType change_type = wallet.TransactionChangeType(coin_control.m_change_type ? *coin_control.m_change_type : wallet.m_default_change_type, vecSend);
     ReserveDestination reservedest(&wallet, change_type);
     unsigned int outputs_to_subtract_fee_from = 0; // The number of outputs which we are subtracting the fee from
     for (const auto& recipient : vecSend) {
+        if (IsDust(recipient, wallet.chain().relayDustFee())) {
+            return util::Error{_("Transaction amount too small")};
+        }
+
+        // Include the fee cost for outputs.
+        coin_selection_params.tx_noinputs_size += GetSerializeSizeForRecipient(recipient);
         recipients_sum += recipient.nAmount;
 
         if (recipient.fSubtractFeeFromAmount) {
@@ -1052,7 +1095,7 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     if (change_spend_size == -1) {
         coin_selection_params.change_spend_size = DUMMY_NESTED_P2WPKH_INPUT_SIZE;
     } else {
-        coin_selection_params.change_spend_size = (size_t)change_spend_size;
+        coin_selection_params.change_spend_size = change_spend_size;
     }
 
     // Set discard feerate
@@ -1088,23 +1131,6 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     const auto change_spend_fee = coin_selection_params.m_discard_feerate.GetFee(coin_selection_params.change_spend_size);
     coin_selection_params.min_viable_change = std::max(change_spend_fee + 1, dust);
 
-    // Static vsize overhead + outputs vsize. 4 version, 4 nLocktime, 1 input count, 1 witness overhead (dummy, flag, stack size)
-    coin_selection_params.tx_noinputs_size = 10 + GetSizeOfCompactSize(vecSend.size()); // bytes for output count
-
-    // vouts to the payees
-    for (const auto& recipient : vecSend)
-    {
-        CTxOut txout(recipient.nAmount, GetScriptForDestination(recipient.dest));
-
-        // Include the fee cost for outputs.
-        coin_selection_params.tx_noinputs_size += ::GetSerializeSize(txout);
-
-        if (IsDust(txout, wallet.chain().relayDustFee())) {
-            return util::Error{_("Transaction amount too small")};
-        }
-        txNew.vout.push_back(txout);
-    }
-
     // Include the fees for things that aren't inputs, excluding the change output
     const CAmount not_input_fees = coin_selection_params.m_effective_feerate.GetFee(coin_selection_params.m_subtract_fee_outputs ? 0 : coin_selection_params.tx_noinputs_size);
     CAmount selection_target = recipients_sum + not_input_fees;
@@ -1138,13 +1164,19 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
         return util::Error{err.empty() ?_("Insufficient funds") : err};
     }
     const SelectionResult& result = *select_coins_res;
-    TRACE5(coin_selection, selected_coins,
+    TRACEPOINT(coin_selection, selected_coins,
            wallet.GetName().c_str(),
            GetAlgorithmName(result.GetAlgo()).c_str(),
            result.GetTarget(),
            result.GetWaste(),
            result.GetSelectedValue());
 
+    // vouts to the payees
+    txNew.vout.reserve(vecSend.size() + 1); // + 1 because of possible later insert
+    for (const auto& recipient : vecSend)
+    {
+        txNew.vout.emplace_back(recipient.nAmount, GetScriptForDestination(recipient.dest));
+    }
     const CAmount change_amount = result.GetChange(coin_selection_params.min_viable_change, coin_selection_params.m_change_fee);
     if (change_amount > 0) {
         CTxOut newTxOut(change_amount, scriptChange);
@@ -1191,6 +1223,7 @@ static util::Result<CreatedTransactionResult> CreateTransactionInternal(
     // behavior."
     bool use_anti_fee_sniping = true;
     const uint32_t default_sequence{coin_control.m_signal_bip125_rbf.value_or(wallet.m_signal_rbf) ? MAX_BIP125_RBF_SEQUENCE : CTxIn::MAX_SEQUENCE_NONFINAL};
+    txNew.vin.reserve(selected_coins.size());
     for (const auto& coin : selected_coins) {
         std::optional<uint32_t> sequence = coin_control.GetSequence(coin->outpoint);
         if (sequence) {
@@ -1352,7 +1385,7 @@ util::Result<CreatedTransactionResult> CreateTransaction(
     LOCK(wallet.cs_wallet);
 
     auto res = CreateTransactionInternal(wallet, vecSend, change_pos, coin_control, sign);
-    TRACE4(coin_selection, normal_create_tx_internal,
+    TRACEPOINT(coin_selection, normal_create_tx_internal,
            wallet.GetName().c_str(),
            bool(res),
            res ? res->fee : 0,
@@ -1361,7 +1394,7 @@ util::Result<CreatedTransactionResult> CreateTransaction(
     const auto& txr_ungrouped = *res;
     // try with avoidpartialspends unless it's enabled already
     if (txr_ungrouped.fee > 0 /* 0 means non-functional fee rate estimation */ && wallet.m_max_aps_fee > -1 && !coin_control.m_avoid_partial_spends) {
-        TRACE1(coin_selection, attempting_aps_create_tx, wallet.GetName().c_str());
+        TRACEPOINT(coin_selection, attempting_aps_create_tx, wallet.GetName().c_str());
         CCoinControl tmp_cc = coin_control;
         tmp_cc.m_avoid_partial_spends = true;
 
@@ -1373,7 +1406,7 @@ util::Result<CreatedTransactionResult> CreateTransaction(
         auto txr_grouped = CreateTransactionInternal(wallet, vecSend, change_pos, tmp_cc, sign);
         // if fee of this alternative one is within the range of the max fee, we use this one
         const bool use_aps{txr_grouped.has_value() ? (txr_grouped->fee <= txr_ungrouped.fee + wallet.m_max_aps_fee) : false};
-        TRACE5(coin_selection, aps_create_tx_internal,
+        TRACEPOINT(coin_selection, aps_create_tx_internal,
                wallet.GetName().c_str(),
                use_aps,
                txr_grouped.has_value(),

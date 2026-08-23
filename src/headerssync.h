@@ -15,20 +15,22 @@
 #include <util/hasher.h>
 
 #include <deque>
+#include <map>
 #include <vector>
 
 // A compressed CBlockHeader, which leaves out the prevhash
 struct CompressedHeader {
-    // header
     int32_t nVersion{0};
     uint256 hashMerkleRoot;
     uint32_t nTime{0};
     uint32_t nBits{0};
     uint32_t nNonce{0};
+    uint256 hashExtCommitment;
 
     CompressedHeader()
     {
         hashMerkleRoot.SetNull();
+        hashExtCommitment.SetNull();
     }
 
     CompressedHeader(const CBlockHeader& header)
@@ -38,6 +40,7 @@ struct CompressedHeader {
         nTime = header.nTime;
         nBits = header.nBits;
         nNonce = header.nNonce;
+        hashExtCommitment = header.hashExtCommitment;
     }
 
     CBlockHeader GetFullHeader(const uint256& hash_prev_block) {
@@ -48,6 +51,7 @@ struct CompressedHeader {
         ret.nTime = nTime;
         ret.nBits = nBits;
         ret.nNonce = nNonce;
+        ret.hashExtCommitment = hashExtCommitment;
         return ret;
     };
 };
@@ -100,7 +104,7 @@ struct CompressedHeader {
 
 class HeadersSyncState {
 public:
-    ~HeadersSyncState() {}
+    ~HeadersSyncState() = default;
 
     enum class State {
         /** PRESYNC means the peer has not yet demonstrated their chain has
@@ -207,6 +211,16 @@ private:
     /** Return a set of headers that satisfy our proof-of-work threshold */
     std::vector<CBlockHeader> PopHeadersReadyForAcceptance();
 
+    /** Verify the actual (RandomX) proof-of-work for a header at the given
+     * height, deriving the RandomX key from a previously seen key block (or an
+     * ancestor of m_chain_start). Returns true for legacy-era headers, which are
+     * not carried over the compact headers-sync path. */
+    bool ValidateHeaderPoW(const CBlockHeader& header, int height);
+
+    /** Record key-block hashes (heights that are multiples of the RandomX key
+     * interval) so descendants in the same sync can be PoW-verified. */
+    void TrackKeyBlock(const CBlockHeader& header, int height);
+
 private:
     /** NodeId of the peer (used for log messages) **/
     const NodeId m_id;
@@ -273,6 +287,12 @@ private:
 
     /** Current state of our headers sync. */
     State m_download_state{State::PRESYNC};
+
+    /** Key-block hashes (height -> hash) for heights that are multiples of the
+     * RandomX key interval and lie above m_chain_start, recorded as we walk the
+     * peer's chain so that descendant headers can be RandomX-verified. Reset on
+     * the transition from PRESYNC to REDOWNLOAD. */
+    std::map<int, uint256> m_key_block_hashes;
 };
 
 #endif // BITCOIN_HEADERSSYNC_H

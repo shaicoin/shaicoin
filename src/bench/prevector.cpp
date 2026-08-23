@@ -3,11 +3,13 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <prevector.h>
-#include <serialize.h>
-#include <streams.h>
-#include <type_traits>
 
 #include <bench/bench.h>
+#include <serialize.h>
+#include <streams.h>
+
+#include <type_traits>
+#include <vector>
 
 struct nontrivial_t {
     int x{-1};
@@ -85,6 +87,7 @@ static void PrevectorFillVectorDirect(benchmark::Bench& bench)
 {
     bench.run([&] {
         std::vector<prevector<28, T>> vec;
+        vec.reserve(260);
         for (size_t i = 0; i < 260; ++i) {
             vec.emplace_back();
         }
@@ -97,6 +100,7 @@ static void PrevectorFillVectorIndirect(benchmark::Bench& bench)
 {
     bench.run([&] {
         std::vector<prevector<28, T>> vec;
+        vec.reserve(260);
         for (size_t i = 0; i < 260; ++i) {
             // force allocation
             vec.emplace_back(29, T{});

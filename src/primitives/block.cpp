@@ -4,13 +4,40 @@
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
 #include <primitives/block.h>
+#include <primitives/legacy_block.h>
 
 #include <hash.h>
 #include <tinyformat.h>
 
+CBlockHeader::CBlockHeader(const CLegacyBlockHeader& legacy)
+    : nVersion(legacy.nVersion),
+      hashPrevBlock(legacy.hashPrevBlock),
+      hashMerkleRoot(legacy.hashMerkleRoot),
+      nTime(legacy.nTime),
+      nBits(legacy.nBits),
+      nNonce(legacy.nNonce)
+{
+    // Legacy headers have no extension commitment. Set it explicitly to null so
+    // a converted header never carries an indeterminate value into the block
+    // index / preimage.
+    hashExtCommitment.SetNull();
+}
+
+CBlock::CBlock(const CLegacyBlock& legacy)
+{
+    SetNull();
+    nVersion = legacy.nVersion;
+    hashPrevBlock = legacy.hashPrevBlock;
+    hashMerkleRoot = legacy.hashMerkleRoot;
+    nTime = legacy.nTime;
+    nBits = legacy.nBits;
+    nNonce = legacy.nNonce;
+    vtx = legacy.vtx;
+}
+
 uint256 CBlockHeader::GetHash() const
 {
-    return (HashWriter{} << *this).GetHash();
+    return (HashWriter{} << *this).GetSHA256();
 }
 
 std::string CBlock::ToString() const

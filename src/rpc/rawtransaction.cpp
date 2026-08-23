@@ -82,17 +82,6 @@ static void TxToJSON(const CTransaction& tx, const uint256 hashBlock, UniValue& 
     }
 }
 
-static std::vector<RPCResult> ScriptPubKeyDoc() {
-    return
-         {
-             {RPCResult::Type::STR, "asm", "Disassembly of the public key script"},
-             {RPCResult::Type::STR, "desc", "Inferred descriptor for the output"},
-             {RPCResult::Type::STR_HEX, "hex", "The raw public key script bytes, hex-encoded"},
-             {RPCResult::Type::STR, "address", /*optional=*/true, "The Bitcoin address (only if a well-defined address exists)"},
-             {RPCResult::Type::STR, "type", "The type (one of: " + GetAllOutputTypes() + ")"},
-         };
-}
-
 static std::vector<RPCResult> DecodeTxDoc(const std::string& txid_field_doc)
 {
     return {
@@ -338,15 +327,7 @@ static RPCHelpMan getrawtransaction()
         throw JSONRPCError(RPC_INVALID_ADDRESS_OR_KEY, "The genesis block coinbase is not considered an ordinary transaction and cannot be retrieved");
     }
 
-    // Accept either a bool (true) or a num (>=0) to indicate verbosity.
-    int verbosity{0};
-    if (!request.params[1].isNull()) {
-        if (request.params[1].isBool()) {
-            verbosity = request.params[1].get_bool();
-        } else {
-            verbosity = request.params[1].getInt<int>();
-        }
-    }
+    int verbosity{ParseVerbosity(request.params[1], /*default_verbosity=*/0, /*allow_bool=*/true)};
 
     if (!request.params[2].isNull()) {
         LOCK(cs_main);
@@ -405,10 +386,15 @@ static RPCHelpMan getrawtransaction()
     CBlockUndo blockUndo;
     CBlock block;
 
-    if (tx->IsCoinBase() || !blockindex || WITH_LOCK(::cs_main, return chainman.m_blockman.IsBlockPruned(*blockindex)) ||
-        !(chainman.m_blockman.UndoReadFromDisk(blockUndo, *blockindex) && chainman.m_blockman.ReadBlockFromDisk(block, *blockindex))) {
+    if (tx->IsCoinBase() || !blockindex || WITH_LOCK(::cs_main, return !(blockindex->nStatus & BLOCK_HAVE_MASK))) {
         TxToJSON(*tx, hash_block, result, chainman.ActiveChainstate());
         return result;
+    }
+    if (!chainman.m_blockman.ReadBlockUndo(blockUndo, *blockindex)) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Undo data expected but can't be read. This could be due to disk corruption or a conflict with a pruning event.");
+    }
+    if (!chainman.m_blockman.ReadBlock(block, *blockindex)) {
+        throw JSONRPCError(RPC_INTERNAL_ERROR, "Block data expected but can't be read. This could be due to disk corruption or a conflict with a pruning event.");
     }
 
     CTxUndo* undoTX {nullptr};
@@ -506,18 +492,18 @@ static RPCHelpMan decodescript()
         RPCResult{
             RPCResult::Type::OBJ, "", "",
             {
-                {RPCResult::Type::STR, "asm", "Script public key"},
+                {RPCResult::Type::STR, "asm", "Disassembly of the script"},
                 {RPCResult::Type::STR, "desc", "Inferred descriptor for the script"},
                 {RPCResult::Type::STR, "type", "The output type (e.g. " + GetAllOutputTypes() + ")"},
                 {RPCResult::Type::STR, "address", /*optional=*/true, "The Bitcoin address (only if a well-defined address exists)"},
                 {RPCResult::Type::STR, "p2sh", /*optional=*/true,
                  "address of P2SH script wrapping this redeem script (not returned for types that should not be wrapped)"},
                 {RPCResult::Type::OBJ, "segwit", /*optional=*/true,
-                 "Result of a witness script public key wrapping this redeem script (not returned for types that should not be wrapped)",
+                 "Result of a witness output script wrapping this redeem script (not returned for types that should not be wrapped)",
                  {
-                     {RPCResult::Type::STR, "asm", "String representation of the script public key"},
-                     {RPCResult::Type::STR_HEX, "hex", "Hex string of the script public key"},
-                     {RPCResult::Type::STR, "type", "The type of the script public key (e.g. witness_v0_keyhash or witness_v0_scripthash)"},
+                     {RPCResult::Type::STR, "asm", "Disassembly of the output script"},
+                     {RPCResult::Type::STR_HEX, "hex", "The raw output script bytes, hex-encoded"},
+                     {RPCResult::Type::STR, "type", "The type of the output script (e.g. witness_v0_keyhash or witness_v0_scripthash)"},
                      {RPCResult::Type::STR, "address", /*optional=*/true, "The Bitcoin address (only if a well-defined address exists)"},
                      {RPCResult::Type::STR, "desc", "Inferred descriptor for the script"},
                      {RPCResult::Type::STR, "p2sh-segwit", "address of the P2SH script wrapping this witness redeem script"},
@@ -557,6 +543,7 @@ static RPCHelpMan decodescript()
         case TxoutType::SCRIPTHASH:
         case TxoutType::WITNESS_UNKNOWN:
         case TxoutType::WITNESS_V1_TAPROOT:
+        case TxoutType::ANCHOR:
             // Should not be wrapped
             return false;
         } // no default case, so the compiler can warn about missing cases
@@ -599,6 +586,7 @@ static RPCHelpMan decodescript()
             case TxoutType::WITNESS_V0_KEYHASH:
             case TxoutType::WITNESS_V0_SCRIPTHASH:
             case TxoutType::WITNESS_V1_TAPROOT:
+            case TxoutType::ANCHOR:
                 // Should not be wrapped
                 return false;
             } // no default case, so the compiler can warn about missing cases
@@ -735,7 +723,7 @@ static RPCHelpMan signrawtransactionwithkey()
                                 {
                                     {"txid", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "The transaction id"},
                                     {"vout", RPCArg::Type::NUM, RPCArg::Optional::NO, "The output number"},
-                                    {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "script key"},
+                                    {"scriptPubKey", RPCArg::Type::STR_HEX, RPCArg::Optional::NO, "output script"},
                                     {"redeemScript", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "(required for P2SH) redeem script"},
                                     {"witnessScript", RPCArg::Type::STR_HEX, RPCArg::Optional::OMITTED, "(required for P2WSH or P2SH-P2WSH) witness script"},
                                     {"amount", RPCArg::Type::AMOUNT, RPCArg::Optional::OMITTED, "(required for Segwit inputs) the amount spent"},
@@ -833,9 +821,9 @@ const RPCResult decodepsbt_inputs{
                 {RPCResult::Type::NUM, "amount", "The value in " + CURRENCY_UNIT},
                 {RPCResult::Type::OBJ, "scriptPubKey", "",
                 {
-                    {RPCResult::Type::STR, "asm", "Disassembly of the public key script"},
+                    {RPCResult::Type::STR, "asm", "Disassembly of the output script"},
                     {RPCResult::Type::STR, "desc", "Inferred descriptor for the output"},
-                    {RPCResult::Type::STR_HEX, "hex", "The raw public key script bytes, hex-encoded"},
+                    {RPCResult::Type::STR_HEX, "hex", "The raw output script bytes, hex-encoded"},
                     {RPCResult::Type::STR, "type", "The type, eg 'pubkeyhash'"},
                     {RPCResult::Type::STR, "address", /*optional=*/true, "The Bitcoin address (only if a well-defined address exists)"},
                 }},
@@ -1790,8 +1778,8 @@ static RPCHelpMan joinpsbts()
     std::iota(output_indices.begin(), output_indices.end(), 0);
 
     // Shuffle input and output indices lists
-    Shuffle(input_indices.begin(), input_indices.end(), FastRandomContext());
-    Shuffle(output_indices.begin(), output_indices.end(), FastRandomContext());
+    std::shuffle(input_indices.begin(), input_indices.end(), FastRandomContext());
+    std::shuffle(output_indices.begin(), output_indices.end(), FastRandomContext());
 
     PartiallySignedTransaction shuffled_psbt;
     shuffled_psbt.tx = CMutableTransaction();
@@ -1838,8 +1826,8 @@ static RPCHelpMan analyzepsbt()
                                 {
                                     {RPCResult::Type::STR_HEX, "keyid", "Public key ID, hash160 of the public key, of a public key whose signature is missing"},
                                 }},
-                                {RPCResult::Type::STR_HEX, "redeemscript", /*optional=*/true, "Hash160 of the redeemScript that is missing"},
-                                {RPCResult::Type::STR_HEX, "witnessscript", /*optional=*/true, "SHA256 of the witnessScript that is missing"},
+                                {RPCResult::Type::STR_HEX, "redeemscript", /*optional=*/true, "Hash160 of the redeem script that is missing"},
+                                {RPCResult::Type::STR_HEX, "witnessscript", /*optional=*/true, "SHA256 of the witness script that is missing"},
                             }},
                             {RPCResult::Type::STR, "next", /*optional=*/true, "Role of the next person that this input needs to go to"},
                         }},

@@ -264,6 +264,7 @@ template<typename Stream> inline void Serialize(Stream& s, int64_t a ) { ser_wri
 template<typename Stream> inline void Serialize(Stream& s, uint64_t a) { ser_writedata64(s, a); }
 template <typename Stream, BasicByte B, int N> void Serialize(Stream& s, const B (&a)[N]) { s.write(MakeByteSpan(a)); }
 template <typename Stream, BasicByte B, std::size_t N> void Serialize(Stream& s, const std::array<B, N>& a) { s.write(MakeByteSpan(a)); }
+template <typename Stream, BasicByte B, std::size_t N> void Serialize(Stream& s, std::span<B, N> span) { s.write(std::as_bytes(span)); }
 template <typename Stream, BasicByte B> void Serialize(Stream& s, Span<B> span) { s.write(AsBytes(span)); }
 
 template <typename Stream, CharNotInt8 V> void Unserialize(Stream&, V) = delete; // char serialization forbidden. Use uint8_t or int8_t
@@ -278,6 +279,7 @@ template<typename Stream> inline void Unserialize(Stream& s, int64_t& a ) { a = 
 template<typename Stream> inline void Unserialize(Stream& s, uint64_t& a) { a = ser_readdata64(s); }
 template <typename Stream, BasicByte B, int N> void Unserialize(Stream& s, B (&a)[N]) { s.read(MakeWritableByteSpan(a)); }
 template <typename Stream, BasicByte B, std::size_t N> void Unserialize(Stream& s, std::array<B, N>& a) { s.read(MakeWritableByteSpan(a)); }
+template <typename Stream, BasicByte B, std::size_t N> void Unserialize(Stream& s, std::span<B, N> span) { s.read(std::as_writable_bytes(span)); }
 template <typename Stream, BasicByte B> void Unserialize(Stream& s, Span<B> span) { s.read(AsWritableBytes(span)); }
 
 template <typename Stream> inline void Serialize(Stream& s, bool a) { uint8_t f = a; ser_writedata8(s, f); }
@@ -761,6 +763,26 @@ void Unserialize(Stream& is, T&& a)
     a.Unserialize(is);
 }
 
+/**
+ * 
+ * Added for block header VDF solution 
+ * 
+ **/
+template<typename Stream, size_t N>
+void Serialize(Stream& s, const std::array<uint16_t, N>& arr) {
+    for (size_t i = 0; i < N; ++i) {
+        Serialize(s, arr[i]);
+    }
+}
+
+template<typename Stream, size_t N>
+void Unserialize(Stream& s, std::array<uint16_t, N>& arr) {
+    for (size_t i = 0; i < N; ++i) {
+        Unserialize(s, arr[i]);
+    }
+}
+
+
 /** Default formatter. Serializes objects as themselves.
  *
  * The vector/prevector serialization code passes this to VectorFormatter
@@ -1061,7 +1083,7 @@ protected:
     size_t nSize{0};
 
 public:
-    SizeComputer() {}
+    SizeComputer() = default;
 
     void write(Span<const std::byte> src)
     {

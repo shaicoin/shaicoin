@@ -3,7 +3,7 @@
     <name>AddressBookPage</name>
     <message>
         <source>Right-click to edit address or label</source>
-        <translation type="unfinished">Klikni desnim tasterom za uređivanje adrese ili oznake</translation>
+        <translation type="unfinished">Klikni desnim klikom za uređivanje adrese ili labele</translation>
     </message>
     <message>
         <source>Create a new address</source>
@@ -184,6 +184,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">Unesite u novčanik staru lozinku i novu lozinku.</translation>
     </message>
     <message>
+        <source>Continue</source>
+        <translation type="unfinished">Nastavi</translation>
+    </message>
+    <message>
         <source>Remember that encrypting your wallet cannot fully protect your bitcoins from being stolen by malware infecting your computer.</source>
         <translation type="unfinished">Упамти, шифрирање новчаника не може у потуности заштити твоје биткоине од крађе од стране малвера инфицира твој рачунар.</translation>
     </message>
@@ -224,12 +228,20 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">Pristupna fraza za dekriptovanje novčanika nije tačna.</translation>
     </message>
     <message>
+        <source>The passphrase entered for the wallet decryption is incorrect. It contains a null character (ie - a zero byte). If the passphrase was set with a version of this software prior to 25.0, please try again with only the characters up to — but not including — the first null character. If this is successful, please set a new passphrase to avoid this issue in the future.</source>
+        <translation type="unfinished">Приступна фраза унета за дешифровање новчаника је нетачна. Садржи нулти карактер (тј. - нулти бајт). Ако је приступна фраза постављена са верзијом овог софтвера старијом од 25.0, покушајте поново само са знаковима до — али не укључујући — првог нултог знака. Ако је ово успешно, поставите нову приступну фразу да бисте избегли овај проблем у будућности.</translation>
+    </message>
+    <message>
         <source>Wallet passphrase was successfully changed.</source>
         <translation type="unfinished">Pristupna fraza novčanika je uspešno promenjena.</translation>
     </message>
     <message>
         <source>Passphrase change failed</source>
         <translation type="unfinished">Promena lozinke nije uspela</translation>
+    </message>
+    <message>
+        <source>The old passphrase entered for the wallet decryption is incorrect. It contains a null character (ie - a zero byte). If the passphrase was set with a version of this software prior to 25.0, please try again with only the characters up to — but not including — the first null character.</source>
+        <translation type="unfinished">Стара приступна фраза унета за дешифровање новчаника је нетачна. Садржи нулти карактер (тј. - нулти бајт). Ако је приступна фраза постављена са верзијом овог софтвера старијом од 25.0, покушајте поново са само знаковима до — али не укључујући — првог нултог знака.</translation>
     </message>
     <message>
         <source>Warning: The Caps Lock key is on!</source>
@@ -246,12 +258,16 @@ Signing is only possible with addresses of the type 'legacy'.</source>
 <context>
     <name>BitcoinApplication</name>
     <message>
+        <source>Settings file %1 might be corrupt or invalid.</source>
+        <translation type="unfinished">Датотека подешавања %1 је можда оштећена или неважећа.</translation>
+    </message>
+    <message>
         <source>Runaway exception</source>
         <translation type="unfinished">Изузетак покретања</translation>
     </message>
     <message>
         <source>A fatal error occurred. %1 can no longer continue safely and will quit.</source>
-        <translation type="unfinished">Дошло је до фаталне грешке. 1%1 даље не може безбедно да настави, те ће се угасити.</translation>
+        <translation type="unfinished">Дошло је до фаталне грешке. %1 даље не може безбедно да настави, те ће се угасити.</translation>
     </message>
     <message>
         <source>Internal error</source>
@@ -280,7 +296,7 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     </message>
     <message>
         <source>%1 didn't yet exit safely…</source>
-        <translation type="unfinished">1%1 још увек није изашао безбедно…</translation>
+        <translation type="unfinished">%1 још увек није изашао безбедно…</translation>
     </message>
     <message>
         <source>unknown</source>
@@ -397,7 +413,11 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <source>%1 kB</source>
         <translation type="unfinished">%1 килобајта</translation>
     </message>
-    </context>
+    <message>
+        <source>default wallet</source>
+        <translation type="unfinished">подразумевани новчаник</translation>
+    </message>
+</context>
 <context>
     <name>BitcoinGUI</name>
     <message>
@@ -487,7 +507,7 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     </message>
     <message>
         <source>&amp;Options…</source>
-        <translation type="unfinished">&amp;Опције...</translation>
+        <translation type="unfinished">&amp;Opcije…</translation>
     </message>
     <message>
         <source>&amp;Encrypt Wallet…</source>
@@ -634,6 +654,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">Учитај делимично потписану Bitcoin трансакцију</translation>
     </message>
     <message>
+        <source>Load PSBT from &amp;clipboard…</source>
+        <translation type="unfinished">Учитај ”PSBT” из привремене меморије</translation>
+    </message>
+    <message>
         <source>Load Partially Signed Bitcoin Transaction from clipboard</source>
         <translation type="unfinished">Учитај делимично потписану Bitcoin трансакцију из clipboard-a</translation>
     </message>
@@ -675,6 +699,11 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">Поврати новчаник...</translation>
     </message>
     <message>
+        <source>Restore a wallet from a backup file</source>
+        <extracomment>Status tip for Restore Wallet menu item</extracomment>
+        <translation type="unfinished">Povrati novčanik koristeći backup fajl</translation>
+    </message>
+    <message>
         <source>Close all wallets</source>
         <translation type="unfinished">Затвори све новчанике</translation>
     </message>
@@ -699,10 +728,6 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">Филтрирај вредности у картици за преглед</translation>
     </message>
     <message>
-        <source>default wallet</source>
-        <translation type="unfinished">подразумевани новчаник</translation>
-    </message>
-    <message>
         <source>No wallets available</source>
         <translation type="unfinished">Нема доступних новчаника</translation>
     </message>
@@ -710,6 +735,11 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <source>Wallet Data</source>
         <extracomment>Name of the wallet data file format.</extracomment>
         <translation type="unfinished">Подаци Новчаника</translation>
+    </message>
+    <message>
+        <source>Load Wallet Backup</source>
+        <extracomment>The title for Restore Wallet File Windows</extracomment>
+        <translation type="unfinished">Учитај резевну копију новчаника</translation>
     </message>
     <message>
         <source>Restore Wallet</source>
@@ -720,6 +750,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <source>Wallet Name</source>
         <extracomment>Label of the input field where the name of the wallet is entered.</extracomment>
         <translation type="unfinished">Име Новчаника</translation>
+    </message>
+    <message>
+        <source>Ctrl+M</source>
+        <translation type="unfinished">Ctrl + M</translation>
     </message>
     <message>
         <source>Zoom</source>
@@ -769,6 +803,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <source>Enable network activity</source>
         <extracomment>A context menu item. The network activity was disabled previously.</extracomment>
         <translation type="unfinished">Омогући мрежне активности</translation>
+    </message>
+    <message>
+        <source>Error creating wallet</source>
+        <translation type="unfinished">Greška u kreiranju novčanika</translation>
     </message>
     <message>
         <source>Error: %1</source>
@@ -937,6 +975,10 @@ Signing is only possible with addresses of the type 'legacy'.</source>
         <translation type="unfinished">Копирај &amp;износ</translation>
     </message>
     <message>
+        <source>Copy transaction &amp;ID and output index</source>
+        <translation type="unfinished">Kopiraj transakciju &amp;ID i izlazni index</translation>
+    </message>
+    <message>
         <source>L&amp;ock unspent</source>
         <translation type="unfinished">Закључај непотрошено</translation>
     </message>
@@ -1021,10 +1063,34 @@ Signing is only possible with addresses of the type 'legacy'.</source>
 <context>
     <name>MigrateWalletActivity</name>
     <message>
+        <source>Migrate wallet</source>
+        <translation type="unfinished">Prenesi novčanik</translation>
+    </message>
+    <message>
+        <source>Are you sure you wish to migrate the wallet &lt;i&gt;%1&lt;/i&gt;?</source>
+        <translation type="unfinished">Da li si siuran da želiš da preneseš novčanik &lt;i&gt;%1&lt;/i&gt;? </translation>
+    </message>
+    <message>
         <source>Migrate Wallet</source>
         <translation type="unfinished">Пренеси Новчаник</translation>
     </message>
-    </context>
+    <message>
+        <source>Migrating Wallet &lt;b&gt;%1&lt;/b&gt;…</source>
+        <translation type="unfinished">Prenošenje novčanika &lt;b&gt;%1&lt;/b&gt;… </translation>
+    </message>
+    <message>
+        <source>The wallet '%1' was migrated successfully.</source>
+        <translation type="unfinished">Novčanik '%1' je uspešno prenešen. </translation>
+    </message>
+    <message>
+        <source>Migration failed</source>
+        <translation type="unfinished">Prenošenje novčanika je neuspešno</translation>
+    </message>
+    <message>
+        <source>Migration Successful</source>
+        <translation type="unfinished">Prenošenje novčanika je uspešno</translation>
+    </message>
+</context>
 <context>
     <name>OpenWalletActivity</name>
     <message>
@@ -1034,10 +1100,6 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <message>
         <source>Open wallet warning</source>
         <translation type="unfinished">Упозорење приликом отварања новчаника</translation>
-    </message>
-    <message>
-        <source>default wallet</source>
-        <translation type="unfinished">подразумевани новчаник</translation>
     </message>
     <message>
         <source>Open Wallet</source>
@@ -1523,22 +1585,6 @@ Signing is only possible with addresses of the type 'legacy'.</source>
     <message>
         <source>&amp;External signer script path</source>
         <translation type="unfinished">&amp;Путања скрипте спољног потписника</translation>
-    </message>
-    <message>
-        <source>Automatically open the Bitcoin client port on the router. This only works when your router supports UPnP and it is enabled.</source>
-        <translation type="unfinished">Аутоматски отвори Биткоин клијент порт на рутеру. Ова опција ради само уколико твој рутер подржава и има омогућен UPnP.</translation>
-    </message>
-    <message>
-        <source>Map port using &amp;UPnP</source>
-        <translation type="unfinished">Мапирај порт користећи &amp;UPnP</translation>
-    </message>
-    <message>
-        <source>Automatically open the Bitcoin client port on the router. This only works when your router supports NAT-PMP and it is enabled. The external port could be random.</source>
-        <translation type="unfinished">Аутоматски отворите порт за Битцоин клијент на рутеру. Ово функционише само када ваш рутер подржава НАТ-ПМП и када је омогућен. Спољни порт би могао бити насумичан.</translation>
-    </message>
-    <message>
-        <source>Map port using NA&amp;T-PMP</source>
-        <translation type="unfinished">Мапирајте порт користећи НА&amp;Т-ПМП</translation>
     </message>
     <message>
         <source>Accept connections from outside.</source>
@@ -2351,6 +2397,10 @@ If you are receiving this error you should request the merchant provide a BIP21 
         <translation type="unfinished">Активност мреже онемогућена</translation>
     </message>
     <message>
+        <source>None</source>
+        <translation type="unfinished">Nijedan</translation>
+    </message>
+    <message>
         <source>Executing command without any wallet</source>
         <translation type="unfinished">Извршење команде без новчаника</translation>
     </message>
@@ -3022,8 +3072,8 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
         <translation type="unfinished">Потписи - Потпиши / Потврди поруку</translation>
     </message>
     <message>
-        <source>You can sign messages/agreements with your addresses to prove you can receive bitcoins sent to them. Be careful not to sign anything vague or random, as phishing attacks may try to trick you into signing your identity over to them. Only sign fully-detailed statements you agree to.</source>
-        <translation type="unfinished">Можете потписати поруку/споразум са вашом адресом да би сте доказали да можете примити биткоин послат ка њима. Будите опрезни да не потписујете ништа нејасно или случајно, јер се може десити напад крађе идентитета, да потпишете ваш идентитет нападачу. Потпишите само потпуно детаљне изјаве са којима се слажете.</translation>
+        <source>&amp;Sign Message</source>
+        <translation type="unfinished">&amp;Потпиши поруку</translation>
     </message>
     <message>
         <source>The Bitcoin address to sign the message with</source>
@@ -3110,10 +3160,6 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
         <translation type="unfinished">Молим проверите адресу и покушајте поново.</translation>
     </message>
     <message>
-        <source>The entered address does not refer to a key.</source>
-        <translation type="unfinished">Унесена адреса се не односи на кључ.</translation>
-    </message>
-    <message>
         <source>Wallet unlock was cancelled.</source>
         <translation type="unfinished">Откључавање новчаника је отказано.</translation>
     </message>
@@ -3170,6 +3216,11 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
 </context>
 <context>
     <name>TransactionDesc</name>
+    <message>
+        <source>conflicted with a transaction with %1 confirmations</source>
+        <extracomment>Text explaining the current status of a transaction, shown in the status field of the details window for this transaction. This status represents an unconfirmed transaction that conflicts with a confirmed transaction.</extracomment>
+        <translation type="unfinished">постоји неусаглашеност са трансакцијом са %1 потврда</translation>
+    </message>
     <message>
         <source>abandoned</source>
         <extracomment>Text explaining the current status of a transaction, shown in the status field of the details window for this transaction. This status represents an abandoned transaction.</extracomment>
@@ -3650,11 +3701,7 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
         <source>Could not commit transaction</source>
         <translation type="unfinished">Трансакција није могућа</translation>
     </message>
-    <message>
-        <source>default wallet</source>
-        <translation type="unfinished">подразумевани новчаник</translation>
-    </message>
-</context>
+    </context>
 <context>
     <name>WalletView</name>
     <message>
@@ -3702,16 +3749,8 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
         <translation type="unfinished">%s девелопери</translation>
     </message>
     <message>
-        <source>Cannot obtain a lock on data directory %s. %s is probably already running.</source>
-        <translation type="unfinished">Директоријум података се не може закључати %s. %s је вероватно већ покренут.</translation>
-    </message>
-    <message>
         <source>Distributed under the MIT software license, see the accompanying file %s or %s</source>
         <translation type="unfinished">Дистрибуирано под MIT софтверском лиценцом, погледајте придружени документ %s или %s</translation>
-    </message>
-    <message>
-        <source>Please check that your computer's date and time are correct! If your clock is wrong, %s will not work properly.</source>
-        <translation type="unfinished">Молим проверите да су време и датум на вашем рачунару тачни. Уколико је сат нетачан, %s неће радити исправно.</translation>
     </message>
     <message>
         <source>Please contribute if you find %s useful. Visit %s for further information about the software.</source>
@@ -3778,10 +3817,6 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
         <translation type="unfinished">Не могу решити -%s адреса: '%s'</translation>
     </message>
     <message>
-        <source>Cannot write to data directory '%s'; check permissions.</source>
-        <translation type="unfinished">Није могуће извршити упис у директоријум података '%s'; проверите дозволе за упис.</translation>
-    </message>
-    <message>
         <source>Config setting for %s only applied on %s network when in [%s] section.</source>
         <translation type="unfinished">Подешавање конфигурације за %s је само примењено на %s мрежи када је у [%s] секцији.</translation>
     </message>
@@ -3804,10 +3839,6 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
     <message>
         <source>Disk space is too low!</source>
         <translation type="unfinished">Премало простора на диску!</translation>
-    </message>
-    <message>
-        <source>Do you want to rebuild the block database now?</source>
-        <translation type="unfinished">Да ли желите да сада обновите базу података блокова?</translation>
     </message>
     <message>
         <source>Done loading</source>
@@ -3896,10 +3927,6 @@ Note:  Since the fee is calculated on a per-byte basis, a fee rate of "100 satos
     <message>
         <source>Need to specify a port with -whitebind: '%s'</source>
         <translation type="unfinished">Ви морате одредити порт са -whitebind: '%s'</translation>
-    </message>
-    <message>
-        <source>Not enough file descriptors available.</source>
-        <translation type="unfinished">Нема довољно доступних дескриптора датотеке.</translation>
     </message>
     <message>
         <source>Prune cannot be configured with a negative value.</source>

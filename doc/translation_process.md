@@ -18,8 +18,8 @@ We use automated scripts to help extract translations in both Qt, and non-Qt sou
 
 To automatically regenerate the `bitcoin_en.ts` file, run the following commands:
 ```sh
-cd src/
-make translate
+cmake --preset dev-mode -DWITH_USDT=OFF -DWITH_MULTIPROCESS=OFF
+cmake --build build_dev_mode --target translate
 ```
 
 **Example Qt translation**
@@ -41,7 +41,7 @@ git commit
 ### Creating a Transifex account
 Visit the [Transifex Signup](https://www.transifex.com/signup/) page to create an account. Take note of your username and password, as they will be required to configure the command-line tool.
 
-You can find the Bitcoin translation project at [https://www.transifex.com/bitcoin/bitcoin/](https://www.transifex.com/bitcoin/bitcoin/).
+You can find the Bitcoin translation project at [https://explore.transifex.com/bitcoin/bitcoin/](https://explore.transifex.com/bitcoin/bitcoin/).
 
 ### Installing the Transifex client command-line tool
 The client is used to fetch updated translations. Please check installation instructions and any other details at https://developers.transifex.com/docs/cli.

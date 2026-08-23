@@ -3,7 +3,7 @@
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
-#include <config/bitcoin-config.h> // IWYU pragma: keep
+#include <bitcoin-build-config.h> // IWYU pragma: keep
 
 #include <node/warnings.h>
 
@@ -28,8 +28,7 @@ Warnings::Warnings()
 }
 bool Warnings::Set(warning_type id, bilingual_str message)
 {
-    LOCK(m_mutex);
-    const auto& [_, inserted]{m_warnings.insert({id, std::move(message)})};
+    const auto& [_, inserted]{WITH_LOCK(m_mutex, return m_warnings.insert({id, std::move(message)}))};
     if (inserted) uiInterface.NotifyAlertChanged();
     return inserted;
 }

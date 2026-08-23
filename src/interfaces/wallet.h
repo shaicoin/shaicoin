@@ -65,7 +65,7 @@ using WalletValueMap = std::map<std::string, std::string>;
 class Wallet
 {
 public:
-    virtual ~Wallet() {}
+    virtual ~Wallet() = default;
 
     //! Encrypt wallet.
     virtual bool encryptWallet(const SecureString& wallet_passphrase) = 0;
@@ -342,8 +342,11 @@ public:
     //! Migrate a wallet
     virtual util::Result<WalletMigrationResult> migrateWallet(const std::string& name, const SecureString& passphrase) = 0;
 
+    //! Returns true if wallet stores encryption keys
+    virtual bool isEncrypted(const std::string& wallet_name) = 0;
+
     //! Return available wallets in wallet directory.
-    virtual std::vector<std::string> listWalletDir() = 0;
+    virtual std::vector<std::pair<std::string, std::string>> listWalletDir() = 0;
 
     //! Return interfaces for accessing wallets (if any).
     virtual std::vector<std::unique_ptr<Wallet>> getWallets() = 0;
