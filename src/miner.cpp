@@ -113,6 +113,9 @@ static CBlock CreateGenesisBlock(uint32_t nTime, uint32_t nNonce, uint32_t nBits
 //      .'` \     |_
 //           '-__ / `-
 std::atomic<bool> shouldMine{};
+// Number of mining threads in this process, published by GenerateShaicoins so the
+// huge-pages advisory below can size its recommendation correctly.
+static std::atomic<size_t> g_mine_threads{0};
 std::atomic<uint64_t> total_hashes{0};
 std::atomic<bool> g_mine_require_peers{true};
 
@@ -379,9 +382,16 @@ void static ShaicoinMiner(const CChainParams& chainparams,
                             LogPrintLevel_(BCLog::MINING, BCLog::Level::Info, false,
                                            "RandomX mining: huge pages active (optimal)\n");
                         } else {
+                            // Budget, in 2 MiB pages: 1040 for the 2080 MiB dataset, 128 for the
+                            // 256 MiB cache, plus one 2 MiB scratchpad per mining thread. Quoting
+                            // a fixed constant silently starves the last threads' scratchpads on a
+                            // high-core-count machine (1280 pages covers only ~112 threads), so
+                            // derive the figure from the thread count actually in use.
+                            const size_t pages_needed = 1040 + 128 + g_mine_threads.load() + 16 /*slack*/;
                             std::cout << "ShaicoinMiner: WARNING - RandomX huge pages are NOT enabled; "
                                          "mining hashrate will be substantially lower. Enable huge pages "
-                                         "at the OS level (Linux: sysctl -w vm.nr_hugepages=1280) for full speed."
+                                         "at the OS level (Linux: sysctl -w vm.nr_hugepages="
+                                      << pages_needed << ") for full speed."
                                       << std::endl;
                             LogPrintLevel_(BCLog::MINING, BCLog::Level::Warning, false,
                                            "RandomX mining: huge pages NOT enabled - hashrate substantially "
@@ -514,28 +524,42 @@ void DisplayHashRate() {
     }
 }
 
-void GenerateShaicoins(std::optional<CScript> minerAddress,
-                       const CChainParams& chainparams,
-                       ChainstateManager& chainman,
-                       const CConnman& conman,
-                       const CTxMemPool& mempool,
-                       size_t nThreads)
+// Mining launch context. Captured on the first GenerateShaicoins() call so the
+// thread count can be changed later (SetMineThreadCount) without restarting the
+// node, and so the miner threads have something stable to reference: the threads
+// outlive the GenerateShaicoins() call frame, so they must NOT hold references
+// into it. In particular the coinbase script is COPIED here rather than passed as
+// std::cref(*minerAddress) into the by-value optional parameter, which left every
+// miner thread holding a reference into a destroyed stack frame.
+namespace {
+std::mutex g_miner_control_mutex;
+std::vector<std::thread> g_miner_threads;      // guarded by g_miner_control_mutex
+CScript g_miner_address;                       // stable storage for the coinbase script
+const CChainParams* g_miner_chainparams{nullptr};
+ChainstateManager* g_miner_chainman{nullptr};
+const CConnman* g_miner_conman{nullptr};
+const CTxMemPool* g_miner_mempool{nullptr};
+bool g_miner_configured{false};
+
+// Refuse absurd thread counts outright. Oversubscribing is already
+// counterproductive (each thread needs its own 2 MiB RandomX scratchpad, ideally
+// a huge page), so this only guards against a typo, not a legitimate setting.
+constexpr size_t MAX_MINE_THREADS = 1024;
+
+void StopMinerThreadsLocked()
 {
-    static std::vector<std::thread> minerThreads;
-
     shouldMine = false;
-
-    for (auto& thread : minerThreads) {
+    for (auto& thread : g_miner_threads) {
         if (thread.joinable()) {
             thread.join();
         }
     }
-    minerThreads.clear();
+    g_miner_threads.clear();
+    g_mine_threads = 0;
+}
 
-    if(minerAddress.has_value() == false) {
-        return;
-    }
-
+void StartMinerThreadsLocked(size_t nThreads, bool from_rpc)
+{
     // Default (nThreads == 0, i.e. no -minethreads specified): use ALL logical
     // cores. Pass -minethreads=N to cap it.
     const bool threads_defaulted = (nThreads == 0);
@@ -546,30 +570,90 @@ void GenerateShaicoins(std::optional<CScript> minerAddress,
         nThreads = 1;
     }
 
-    g_mine_require_peers = gArgs.GetBoolArg("-minerequirepeers", true);
+    g_mine_threads = nThreads;
 
     std::cout << "ShaicoinMiner: using " << nThreads << " mining thread(s)"
-              << (threads_defaulted ? " (all logical cores; override with -minethreads=N)" : " (from -minethreads)")
+              << (from_rpc ? " (set via setminethreads)"
+                           : (threads_defaulted ? " (all logical cores; override with -minethreads=N)"
+                                                : " (from -minethreads)"))
               << std::endl;
 
     LogPrintLevel_(BCLog::MINING, BCLog::Level::Info, false,
                    "GenerateShaicoins: threads=%u (%s) minerequirepeers=%s fork_time=%u key_interval=%d key_delay=%d\n",
-                   nThreads, threads_defaulted ? "default=all-cores" : "user-specified",
+                   nThreads,
+                   from_rpc ? "rpc" : (threads_defaulted ? "default=all-cores" : "user-specified"),
                    g_mine_require_peers ? "yes" : "no",
-                   chainparams.GetConsensus().nRandomXV2Time,
+                   g_miner_chainparams->GetConsensus().nRandomXV2Time,
                    Consensus::RANDOMX_KEY_INTERVAL,
                    Consensus::RANDOMX_KEY_DELAY);
 
     shouldMine = true;
 
-    minerThreads.reserve(nThreads + 1);
+    g_miner_threads.reserve(nThreads + 1);
     for (size_t i = 0; i < nThreads; i++) {
-        minerThreads.emplace_back(ShaicoinMiner,
-                                  std::cref(chainparams),
-                                  std::cref(*minerAddress),
-                                  std::ref(chainman),
-                                  std::cref(conman),
-                                  std::cref(mempool));
+        g_miner_threads.emplace_back(ShaicoinMiner,
+                                     std::cref(*g_miner_chainparams),
+                                     std::cref(g_miner_address),
+                                     std::ref(*g_miner_chainman),
+                                     std::cref(*g_miner_conman),
+                                     std::cref(*g_miner_mempool));
     }
-    minerThreads.emplace_back(DisplayHashRate);
+    g_miner_threads.emplace_back(DisplayHashRate);
+}
+} // namespace
+
+size_t GetMineThreadCount()
+{
+    std::lock_guard<std::mutex> lock(g_miner_control_mutex);
+    return g_miner_threads.empty() ? 0 : g_mine_threads.load();
+}
+
+bool SetMineThreadCount(size_t nThreads, std::string& error)
+{
+    std::lock_guard<std::mutex> lock(g_miner_control_mutex);
+
+    if (!g_miner_configured) {
+        error = "Mining is not running (start the node with -moneyplz=<address>)";
+        return false;
+    }
+    if (nThreads > MAX_MINE_THREADS) {
+        error = strprintf("nthreads must be between 0 and %u (0 = all logical cores)", MAX_MINE_THREADS);
+        return false;
+    }
+
+    // The RandomX dataset lives in RandomXManager and is NOT torn down here, so
+    // the restart does not pay the ~2 GB dataset rebuild; the new threads just
+    // re-acquire a VM against the dataset that is already resident. Joining can
+    // take a moment because a thread only notices shouldMine between hashes.
+    StopMinerThreadsLocked();
+    StartMinerThreadsLocked(nThreads, /*from_rpc=*/true);
+    return true;
+}
+
+void GenerateShaicoins(std::optional<CScript> minerAddress,
+                       const CChainParams& chainparams,
+                       ChainstateManager& chainman,
+                       const CConnman& conman,
+                       const CTxMemPool& mempool,
+                       size_t nThreads)
+{
+    std::lock_guard<std::mutex> lock(g_miner_control_mutex);
+
+    StopMinerThreadsLocked();
+
+    if(minerAddress.has_value() == false) {
+        g_miner_configured = false;
+        return;
+    }
+
+    g_miner_address = *minerAddress;   // copy: the threads outlive this frame
+    g_miner_chainparams = &chainparams;
+    g_miner_chainman = &chainman;
+    g_miner_conman = &conman;
+    g_miner_mempool = &mempool;
+    g_miner_configured = true;
+
+    g_mine_require_peers = gArgs.GetBoolArg("-minerequirepeers", true);
+
+    StartMinerThreadsLocked(nThreads, /*from_rpc=*/false);
 }

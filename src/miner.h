@@ -537,4 +537,16 @@ void GenerateShaicoins(std::optional<CScript> minerAddress,
                        const CTxMemPool& mempool,
                        size_t nThreads = 0);
 
+/** Number of miner threads currently running; 0 if not mining. */
+size_t GetMineThreadCount();
+
+/**
+ * Change the miner thread count at runtime, without restarting the node.
+ * nThreads == 0 means "all logical cores". Stops the running miner threads and
+ * starts the new set; the RandomX dataset is retained, so this does not pay for
+ * a dataset rebuild. Returns false and fills `error` if mining was never started
+ * (node started without -moneyplz) or the count is out of range.
+ */
+bool SetMineThreadCount(size_t nThreads, std::string& error);
+
 #endif // BITCOIN_MINER_H

@@ -19,6 +19,7 @@
 #include <deploymentstatus.h>
 #include <interfaces/mining.h>
 #include <key_io.h>
+#include <miner.h>
 #include <net.h>
 #include <node/context.h>
 #include <node/miner.h>
@@ -429,6 +430,7 @@ static RPCHelpMan getmininginfo()
                         {RPCResult::Type::STR_HEX, "target", "The current target"},
                         {RPCResult::Type::NUM, "networkhashps", "The network hashes per second"},
                         {RPCResult::Type::NUM, "pooledtx", "The size of the mempool"},
+                        {RPCResult::Type::NUM, "minethreads", "Number of local mining threads running (0 if not mining locally)"},
                         {RPCResult::Type::STR, "chain", "current network name (" LIST_CHAIN_NAMES ")"},
                         {RPCResult::Type::STR_HEX, "signet_challenge", /*optional=*/true, "The block challenge (aka. block script), in hexadecimal (only present if the current network is a signet)"},
                         {RPCResult::Type::OBJ, "next", "The next block",
@@ -469,6 +471,7 @@ static RPCHelpMan getmininginfo()
     obj.pushKV("target", GetTarget(tip, chainman.GetConsensus().powLimit).GetHex());
     obj.pushKV("networkhashps",    getnetworkhashps().HandleRequest(request));
     obj.pushKV("pooledtx",         (uint64_t)mempool.size());
+    obj.pushKV("minethreads",      (uint64_t)GetMineThreadCount());
     obj.pushKV("chain", chainman.GetParams().GetChainTypeString());
 
     UniValue next(UniValue::VOBJ);
@@ -492,6 +495,47 @@ static RPCHelpMan getmininginfo()
     };
 }
 
+
+static RPCHelpMan setminethreads()
+{
+    return RPCHelpMan{"setminethreads",
+                "\nSets the number of local mining threads, without restarting the node.\n"
+                "Requires the node to have been started with -moneyplz=<address>.\n"
+                "The RandomX dataset is kept across the change, so this is cheap; it can\n"
+                "take a moment to return because each thread only stops between hashes.\n",
+                {
+                    {"nthreads", RPCArg::Type::NUM, RPCArg::Optional::NO, "The number of mining threads. 0 means all logical cores."},
+                },
+                RPCResult{
+                    RPCResult::Type::OBJ, "", "",
+                    {
+                        {RPCResult::Type::NUM, "threads", "The number of mining threads now running"},
+                    }},
+                RPCExamples{
+                    "\nUse 64 threads\n"
+                    + HelpExampleCli("setminethreads", "64")
+            + "\nGo back to every logical core\n"
+                    + HelpExampleCli("setminethreads", "0")
+            + HelpExampleRpc("setminethreads", "64")
+                },
+        [&](const RPCHelpMan& self, const JSONRPCRequest& request) -> UniValue
+{
+    const int64_t requested{request.params[0].getInt<int64_t>()};
+    if (requested < 0) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, "nthreads cannot be negative (0 = all logical cores)");
+    }
+
+    std::string error;
+    if (!SetMineThreadCount(static_cast<size_t>(requested), error)) {
+        throw JSONRPCError(RPC_INVALID_PARAMETER, error);
+    }
+
+    UniValue obj(UniValue::VOBJ);
+    obj.pushKV("threads", (uint64_t)GetMineThreadCount());
+    return obj;
+},
+    };
+}
 
 // NOTE: Unlike wallet RPC (which use BTC values), mining RPCs follow GBT (BIP 22) in using satoshi amounts
 static RPCHelpMan prioritisetransaction()
@@ -1137,6 +1181,7 @@ void RegisterMiningRPCCommands(CRPCTable& t)
     static const CRPCCommand commands[]{
         {"mining", &getnetworkhashps},
         {"mining", &getmininginfo},
+        {"mining", &setminethreads},
         {"mining", &prioritisetransaction},
         {"mining", &getprioritisedtransactions},
         {"mining", &getblocktemplate},

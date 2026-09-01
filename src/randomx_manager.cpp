@@ -10,10 +10,24 @@
 #include <thread>
 #include <chrono>
 
-randomx_flags RandomXManager::BuildFlags(bool useFastMode, bool useLargePages)
+randomx_flags RandomXManager::BuildFlags(bool useFastMode, bool useLargePages, bool secureJit)
 {
     randomx_flags flags = randomx_get_flags() | RANDOMX_FLAG_V2;
-    if (flags & RANDOMX_FLAG_JIT) {
+    // W^X on the JIT buffer (RANDOMX_FLAG_SECURE) costs two mprotect() calls per
+    // RandomX program, i.e. 16 per hash. mprotect takes the process-wide mmap_lock
+    // for write and triggers a TLB shootdown IPI to every core running this process,
+    // so with many mining threads in one address space they serialize in the kernel
+    // instead of hashing. Measured on a 64-core/128-thread box, fast mode + huge
+    // pages: 1.2 kH/s with SECURE vs 40.5 kH/s without (34x), while the SINGLE-thread
+    // cost is only ~5% (689 vs 726 H/s) - i.e. the loss is pure lock contention, not
+    // per-hash overhead.
+    //
+    // So it is enabled only for the attacker-reachable VALIDATION domain, which is
+    // already serialized under m_mutex (one hash at a time) and therefore cannot hit
+    // that contention, and never for MINING, which only ever hashes headers this node
+    // built itself. randomx_get_flags() still sets it unconditionally on platforms
+    // that mandate W^X (RANDOMX_FORCE_SECURE builds), so those stay correct.
+    if (secureJit && (flags & RANDOMX_FLAG_JIT)) {
         flags |= RANDOMX_FLAG_SECURE;
     }
     if (useLargePages) {
@@ -143,12 +157,12 @@ void RandomXManager::InitUnlocked(bool useFastMode)
 
     m_fast_mode = useFastMode;
 
-    if (!TryAllocResources(BuildFlags(useFastMode, true), useFastMode)) {
-        if (!TryAllocResources(BuildFlags(useFastMode, false), useFastMode)) {
+    if (!TryAllocResources(BuildFlags(useFastMode, true, /*secureJit=*/false), useFastMode)) {
+        if (!TryAllocResources(BuildFlags(useFastMode, false, /*secureJit=*/false), useFastMode)) {
             if (useFastMode) {
                 m_fast_mode = false;
-                if (!TryAllocResources(BuildFlags(false, true), false) &&
-                    !TryAllocResources(BuildFlags(false, false), false)) {
+                if (!TryAllocResources(BuildFlags(false, true, /*secureJit=*/false), false) &&
+                    !TryAllocResources(BuildFlags(false, false, /*secureJit=*/false), false)) {
                     LogError("RandomX: Failed to allocate cache\n");
                     return;
                 }
@@ -190,13 +204,13 @@ void RandomXManager::EnsureFastModeUnlocked()
 
     // Build the fast-mode cache+dataset off to the side, committing only once both
     // succeed (mirrors EnsureKeyLoaded's commit-on-success discipline).
-    randomx_flags new_flags = BuildFlags(true, true);
+    randomx_flags new_flags = BuildFlags(true, true, /*secureJit=*/false);
     randomx_cache* nc = randomx_alloc_cache(new_flags);
     randomx_dataset* nd = nc ? randomx_alloc_dataset(new_flags) : nullptr;
     if (!nc || !nd) {
         if (nc) randomx_release_cache(nc);
         if (nd) randomx_release_dataset(nd);
-        new_flags = BuildFlags(true, false);
+        new_flags = BuildFlags(true, false, /*secureJit=*/false);
         nc = randomx_alloc_cache(new_flags);
         nd = nc ? randomx_alloc_dataset(new_flags) : nullptr;
         if (nc && nd) {
@@ -445,7 +459,7 @@ uint256 RandomXManager::HashWithKey(const std::array<uint8_t, Consensus::RANDOMX
     // (2) never allocate the ~2 GB dataset, so a peer feeding us headers from
     // many key epochs cannot exhaust memory or thrash a shared dataset.
     if (!m_val_flags_init) {
-        m_val_flags = BuildFlags(/*useFastMode=*/false, /*useLargePages=*/false);
+        m_val_flags = BuildFlags(/*useFastMode=*/false, /*useLargePages=*/false, /*secureJit=*/true);
         m_val_flags_init = true;
     }
 

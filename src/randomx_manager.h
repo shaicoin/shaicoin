@@ -148,7 +148,11 @@ private:
     std::shared_ptr<randomx_cache> GetOrCreateValidationCacheUnlocked(
         const std::array<uint8_t, Consensus::RANDOMX_KEY_MAX_BYTES>& key);
 
-    static randomx_flags BuildFlags(bool useFastMode, bool useLargePages);
+    // secureJit enables W^X (RANDOMX_FLAG_SECURE) on the JIT buffer. It is a large
+    // multi-thread throughput loss (mprotect serializes on the process-wide
+    // mmap_lock), so it is used ONLY for the serialized validation domain, never
+    // for mining. See the comment on the definition.
+    static randomx_flags BuildFlags(bool useFastMode, bool useLargePages, bool secureJit);
     bool TryAllocResources(randomx_flags flags, bool useFastMode);
 
     static std::shared_ptr<randomx_cache> WrapCache(randomx_cache* c) {
