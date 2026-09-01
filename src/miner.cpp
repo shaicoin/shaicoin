@@ -343,7 +343,6 @@ void static ShaicoinMiner(const CChainParams& chainparams,
 
             int nextHeight = pindexPrev->nHeight + 1;
 
-            uint256 ext_commitment32;
             RandomXKeyContext key_ctx;
             if (useRandomX) {
                 key_ctx = LookupRandomXKeyContext(nextHeight, pindexPrev);
@@ -391,29 +390,7 @@ void static ShaicoinMiner(const CChainParams& chainparams,
                     }
                 }
 
-                ShaicoinExtPayload extPayload;
-                extPayload.ext_version = 1;
-                extPayload.flags = 0;
-                extPayload.path_seed = ComputePathSeed(
-                    pindexPrev->GetBlockHash(), key_ctx.key_block_hash,
-                    uint256{}, pblock->nTime);
-
-                ext_commitment32 = extPayload.GetCommitmentHash();
-
-                auto commitScript = BuildExtCommitmentScript(ext_commitment32);
-                CMutableTransaction coinbaseTx(*pblock->vtx[0]);
-                CTxOut commitOut;
-                commitOut.nValue = 0;
-                commitOut.scriptPubKey = CScript(commitScript.begin(), commitScript.end());
-                coinbaseTx.vout.push_back(commitOut);
-                pblock->vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
-
-                // The commitment is bound into the header so that the block's
-                // proof-of-work can be verified from the header alone.
-                pblock->hashExtCommitment = ext_commitment32;
             }
-
-            pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
 
             arith_uint256 hashTarget = arith_uint256().SetCompact(pblock->nBits);
             uint256 hash;

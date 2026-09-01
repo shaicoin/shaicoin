@@ -149,6 +149,13 @@ unsigned int GetNextWorkRequired_ShaiHive_DiffRebound_V2(const CBlockIndex* pind
 unsigned int GetNextWorkRequired_RandomX(const CBlockIndex* pindexLast,
                                          const CBlockHeader *pblock,
                                          const Consensus::Params& params) {
+    // Regtest is explicitly configured with fPowNoRetargeting.  Let it use
+    // its own powLimit so a post-fork RandomX block can be mined interactively
+    // during local consensus tests. Mainnet and testnet retain the tighter
+    // RandomX-specific limit below.
+    if (params.fPowNoRetargeting) {
+        return UintToArith256(params.powLimit).GetCompact();
+    }
     if (!pindexLast->IsPostFork()) {
         arith_uint256 bnSeed = bnRandomXProofOfWorkLimit;
         bnSeed /= 10;
@@ -461,9 +468,12 @@ static bool RandomXTargetFromHeader(const CBlockHeader& header,
     bool fOverflow;
     bnTarget.SetCompact(header.nBits, &fNegative, &fOverflow);
 
+    const arith_uint256 randomx_limit = params.fPowNoRetargeting
+        ? UintToArith256(params.powLimit)
+        : bnRandomXProofOfWorkLimit;
     if (fNegative || bnTarget == 0 || fOverflow ||
         bnTarget > UintToArith256(params.powLimit) ||
-        bnTarget > bnRandomXProofOfWorkLimit) {
+        bnTarget > randomx_limit) {
         return false;
     }
     return true;

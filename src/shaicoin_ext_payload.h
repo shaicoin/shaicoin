@@ -6,11 +6,15 @@
 #define SHAICOIN_EXT_PAYLOAD_H
 
 #include <serialize.h>
+#include <streams.h>
+#include <consensus/merkle.h>
 #include <uint256.h>
 #include <hash.h>
 #include <primitives/block.h>
 #include <primitives/transaction.h>
 #include <script/script.h>
+#include <algorithm>
+#include <utility>
 #include <vector>
 #include <optional>
 
@@ -55,25 +59,65 @@ inline std::vector<uint8_t> BuildExtCommitmentScript(const uint256& ext_commitme
     return script;
 }
 
+inline bool IsShaicoinExtCommitmentScript(const CScript& scriptPubKey)
+{
+    if (scriptPubKey.size() != 2 + SHAI_EXT_COMMITMENT_PREFIX_LEN + 32 ||
+        scriptPubKey[0] != OP_RETURN ||
+        scriptPubKey[1] != SHAI_EXT_COMMITMENT_PREFIX_LEN + 32) {
+        return false;
+    }
+
+    return std::equal(std::begin(SHAI_EXT_COMMITMENT_PREFIX),
+                      std::end(SHAI_EXT_COMMITMENT_PREFIX),
+                      scriptPubKey.begin() + 2);
+}
+
+// Bind the post-fork coinbase body to the extended header. Keeping this in one
+// helper prevents the local miner and external-template RPC from producing
+// subtly different commitments for the same candidate block.
+inline bool ApplyShaicoinExtCommitment(CBlock& block, const uint256& keyBlockHash)
+{
+    if (block.vtx.empty()) {
+        return false;
+    }
+
+    ShaicoinExtPayload extPayload;
+    extPayload.ext_version = 1;
+    extPayload.flags = 0;
+    extPayload.path_seed = ComputePathSeed(block.hashPrevBlock, keyBlockHash, uint256{}, block.nTime);
+
+    const uint256 commitment = extPayload.GetCommitmentHash();
+    CMutableTransaction coinbaseTx(*block.vtx[0]);
+    CTxOut commitOut;
+    commitOut.nValue = 0;
+    const auto commitScript = BuildExtCommitmentScript(commitment);
+    commitOut.scriptPubKey = CScript(commitScript.begin(), commitScript.end());
+    const auto existing = std::find_if(coinbaseTx.vout.begin(), coinbaseTx.vout.end(),
+                                       [](const CTxOut& txout) {
+                                           return IsShaicoinExtCommitmentScript(txout.scriptPubKey);
+                                       });
+    if (existing == coinbaseTx.vout.end()) {
+        coinbaseTx.vout.push_back(std::move(commitOut));
+    } else {
+        *existing = std::move(commitOut);
+    }
+    block.vtx[0] = MakeTransactionRef(std::move(coinbaseTx));
+
+    block.hashExtCommitment = commitment;
+    block.hashMerkleRoot = BlockMerkleRoot(block);
+    return true;
+}
+
 inline std::optional<uint256> ExtractExtCommitmentFromCoinbase(const CTransaction& coinbaseTx)
 {
     for (const auto& txout : coinbaseTx.vout) {
         const CScript& scriptPubKey = txout.scriptPubKey;
-        if (scriptPubKey.size() >= 1 + 1 + SHAI_EXT_COMMITMENT_PREFIX_LEN + 32 &&
-            scriptPubKey[0] == OP_RETURN) {
-            size_t push_len = scriptPubKey[1];
-            if (push_len == SHAI_EXT_COMMITMENT_PREFIX_LEN + 32 &&
-                scriptPubKey.size() >= 2 + push_len) {
-                if (std::equal(std::begin(SHAI_EXT_COMMITMENT_PREFIX),
-                               std::end(SHAI_EXT_COMMITMENT_PREFIX),
-                               scriptPubKey.begin() + 2)) {
-                    uint256 commitment;
-                    std::copy(scriptPubKey.begin() + 2 + SHAI_EXT_COMMITMENT_PREFIX_LEN,
-                              scriptPubKey.begin() + 2 + SHAI_EXT_COMMITMENT_PREFIX_LEN + 32,
-                              commitment.begin());
-                    return commitment;
-                }
-            }
+        if (IsShaicoinExtCommitmentScript(scriptPubKey)) {
+            uint256 commitment;
+            std::copy(scriptPubKey.begin() + 2 + SHAI_EXT_COMMITMENT_PREFIX_LEN,
+                      scriptPubKey.begin() + 2 + SHAI_EXT_COMMITMENT_PREFIX_LEN + 32,
+                      commitment.begin());
+            return commitment;
         }
     }
     return std::nullopt;

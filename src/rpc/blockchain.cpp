@@ -36,11 +36,13 @@
 #include <node/utxo_snapshot.h>
 #include <node/warnings.h>
 #include <primitives/transaction.h>
+#include <randomx_manager.h>
 #include <rpc/server.h>
 #include <rpc/server_util.h>
 #include <rpc/util.h>
 #include <script/descriptor.h>
 #include <serialize.h>
+#include <shaicoin_ext_payload.h>
 #include <streams.h>
 #include <sync.h>
 #include <txdb.h>
@@ -173,6 +175,13 @@ UniValue blockheaderToJSON(const CBlockIndex& tip, const CBlockIndex& blockindex
     result.pushKV("difficulty", GetDifficulty(blockindex));
     result.pushKV("chainwork", blockindex.nChainWork.GetHex());
     result.pushKV("nTx", blockindex.nTx);
+    // RandomX is the consensus proof after the Shaicoin fork. Expose the
+    // cached, node-verified value for post-fork blocks so external miners and
+    // integration tests can verify byte-for-byte agreement with the node.
+    // `uint256::GetHex()` follows the RPC's normal human-facing byte order.
+    if (!blockindex.randomXPowHash.IsNull()) {
+        result.pushKV("randomx_pow", blockindex.randomXPowHash.GetHex());
+    }
 
     if (blockindex.pprev)
         result.pushKV("previousblockhash", blockindex.pprev->GetBlockHash().GetHex());
@@ -564,6 +573,7 @@ static RPCHelpMan getblockheader()
                             {RPCResult::Type::NUM, "difficulty", "The difficulty"},
                             {RPCResult::Type::STR_HEX, "chainwork", "Expected number of hashes required to produce the current chain"},
                             {RPCResult::Type::NUM, "nTx", "The number of transactions in the block"},
+                            {RPCResult::Type::STR_HEX, "randomx_pow", /*optional=*/true, "Node-verified RandomX proof-of-work hash for a post-fork block"},
                             {RPCResult::Type::STR_HEX, "previousblockhash", /*optional=*/true, "The hash of the previous block (if available)"},
                             {RPCResult::Type::STR_HEX, "nextblockhash", /*optional=*/true, "The hash of the next block (if available)"},
                         }},
@@ -716,6 +726,9 @@ static RPCHelpMan getnewblockraw()
                         {RPCResult::Type::STR_HEX, "blockhex", "Serialized, hex-encoded data for the new block"},
                         {RPCResult::Type::NUM, "difficulty_nbits", "The current network difficulty in nbits format"},
                         {RPCResult::Type::STR_HEX, "difficulty_expanded", "The current network difficulty in expanded hex format"},
+                        {RPCResult::Type::NUM, "height", "Height of the candidate block"},
+                        {RPCResult::Type::NUM, "randomx_key_height", "Height of the RandomX key block (post-fork only)"},
+                        {RPCResult::Type::STR_HEX, "randomx_seed", "60-byte Shaicoin RandomX key (post-fork only)"},
                     }},
                 },
                 RPCExamples{
@@ -746,10 +759,27 @@ static RPCHelpMan getnewblockraw()
         throw JSONRPCError(RPC_MISC_ERROR, "Failed to create new block");
     }
 
-    // Serialize the block
     CBlock* block = &pblocktemplate->block;
-    block->hashMerkleRoot = BlockMerkleRoot(*block);
-    
+    const CBlockIndex* pindexPrev = WITH_LOCK(::cs_main, return chainman.ActiveTip());
+    if (!pindexPrev || pindexPrev->GetBlockHash() != block->hashPrevBlock) {
+        throw JSONRPCError(RPC_MISC_ERROR, "Active chain tip changed while creating block template");
+    }
+
+    const Consensus::Params& consensus = chainman.GetConsensus();
+    const int height = pindexPrev->nHeight + 1;
+    const bool useRandomX = block->nTime >= consensus.nRandomXV2Time;
+    RandomXKeyContext key_ctx;
+
+    if (useRandomX) {
+        key_ctx = LookupRandomXKeyContext(height, pindexPrev);
+        if (!key_ctx.key_block_found) {
+            throw JSONRPCError(RPC_MISC_ERROR, "RandomX key block is unavailable for block template");
+        }
+    }
+
+    // BlockAssembler finalizes the header commitment and merkle root before
+    // validating the template. Do not mutate it here: the RandomX preimage
+    // must stay identical to the bytes given to an external miner.
     DataStream ssBlock;
     ssBlock << TX_WITH_WITNESS(*block);
     std::string strHex = HexStr(ssBlock);
@@ -763,6 +793,11 @@ static RPCHelpMan getnewblockraw()
     result.pushKV("blockhex", strHex);
     result.pushKV("nbits", strprintf("%08x", nBits));
     result.pushKV("expanded", difficultyExpanded.GetHex());
+    result.pushKV("height", height);
+    if (useRandomX) {
+        result.pushKV("randomx_key_height", key_ctx.key_block_height);
+        result.pushKV("randomx_seed", HexStr(key_ctx.key));
+    }
 
     return result;
 },
@@ -807,6 +842,7 @@ static RPCHelpMan getblock()
                     {RPCResult::Type::NUM, "difficulty", "The difficulty"},
                     {RPCResult::Type::STR_HEX, "chainwork", "Expected number of hashes required to produce the chain up to this block (in hex)"},
                     {RPCResult::Type::NUM, "nTx", "The number of transactions in the block"},
+                    {RPCResult::Type::STR_HEX, "randomx_pow", /*optional=*/true, "Node-verified RandomX proof-of-work hash for a post-fork block"},
                     {RPCResult::Type::STR_HEX, "previousblockhash", /*optional=*/true, "The hash of the previous block (if available)"},
                     {RPCResult::Type::STR_HEX, "nextblockhash", /*optional=*/true, "The hash of the next block (if available)"},
                 }},

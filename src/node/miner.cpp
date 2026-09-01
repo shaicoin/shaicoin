@@ -20,6 +20,8 @@
 #include <policy/policy.h>
 #include <pow.h>
 #include <primitives/transaction.h>
+#include <randomx_manager.h>
+#include <shaicoin_ext_payload.h>
 #include <util/moneystr.h>
 #include <util/time.h>
 #include <validation.h>
@@ -174,6 +176,24 @@ std::unique_ptr<CBlockTemplate> BlockAssembler::CreateNewBlock()
     UpdateTime(pblock, chainparams.GetConsensus(), pindexPrev);
     pblock->nBits          = GetNextWorkRequired(pindexPrev, pblock, chainparams.GetConsensus());
     pblock->nNonce         = 0;
+
+    // A post-fork Shaicoin block commits its coinbase extension into the
+    // extended header.  This must happen while building the template, before
+    // TestBlockValidity(), so every template consumer (the built-in miner,
+    // getnewblockraw, and RPC mining helpers) receives a consensus-valid body.
+    // Adding it later made CreateNewBlock fail as soon as RandomX activated.
+    if (pblock->nTime >= chainparams.GetConsensus().nRandomXV2Time) {
+        const RandomXKeyContext key_ctx = LookupRandomXKeyContext(nHeight, pindexPrev);
+        if (!key_ctx.key_block_found) {
+            throw std::runtime_error(strprintf("%s: RandomX key block unavailable at height %d", __func__, nHeight));
+        }
+        if (!ApplyShaicoinExtCommitment(*pblock, key_ctx.key_block_hash)) {
+            throw std::runtime_error(strprintf("%s: unable to apply Shaicoin extension commitment", __func__));
+        }
+    } else {
+        pblock->hashMerkleRoot = BlockMerkleRoot(*pblock);
+    }
+
     pblocktemplate->vTxSigOpsCost[0] = WITNESS_SCALE_FACTOR * GetLegacySigOpCount(*pblock->vtx[0]);
 
     BlockValidationState state;
