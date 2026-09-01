@@ -25,6 +25,7 @@
 #include <node/warnings.h>
 #include <policy/ephemeral_policy.h>
 #include <pow.h>
+#include <randomx_manager.h>
 #include <rpc/blockchain.h>
 #include <rpc/mining.h>
 #include <rpc/server.h>
@@ -33,6 +34,7 @@
 #include <script/descriptor.h>
 #include <script/script.h>
 #include <script/signingprovider.h>
+#include <shaicoin_ext_payload.h>
 #include <txmempool.h>
 #include <univalue.h>
 #include <util/signalinterrupt.h>
@@ -859,6 +861,17 @@ static RPCHelpMan getblocktemplate()
     // Update nTime
     UpdateTime(&block, consensusParams, pindexPrev);
     block.nNonce = 0;
+
+    // The Shaicoin v4.2 extension commitment is derived from nTime. GBT keeps
+    // a cached body and refreshes this local header copy on every request, so
+    // refresh the already-present commitment as well. The helper replaces the
+    // existing output instead of appending another one.
+    if (block.nTime >= consensusParams.nRandomXV2Time) {
+        const RandomXKeyContext key_ctx = LookupRandomXKeyContext(pindexPrev->nHeight + 1, pindexPrev);
+        if (!key_ctx.key_block_found || !ApplyShaicoinExtCommitment(block, key_ctx.key_block_hash)) {
+            throw JSONRPCError(RPC_MISC_ERROR, "Unable to refresh Shaicoin v4.2 block template commitment");
+        }
+    }
 
     // NOTE: If at some point we support pre-segwit miners post-segwit-activation, this needs to take segwit support into consideration
     const bool fPreSegWit = !DeploymentActiveAfter(pindexPrev, chainman, Consensus::DEPLOYMENT_SEGWIT);

@@ -1093,12 +1093,20 @@ bool BlockManager::ReadLegacyBlock(CLegacyBlock& block, const FlatFilePos& pos) 
         return false;
     }
 
-    if (!CheckProofOfWork(block.nTime,
+    // The regtest genesis block is a fixed, trusted chain parameter inherited
+    // from the legacy format.  It intentionally does not carry a valid
+    // Shaicoin VDF proof, so re-validating it through the historical PoW path
+    // prevents a fresh chain from ever loading.  Its identity is still bound
+    // by consensus.hashGenesisBlock; all non-genesis legacy blocks continue to
+    // receive the normal on-disk PoW sanity check below.
+    const Consensus::Params& consensus{GetConsensus()};
+    if (block.GetHash() != consensus.hashGenesisBlock &&
+        !CheckProofOfWork(block.nTime,
                           block.GetSHA256(),
                           block.GetHash(),
                           block.nBits,
                           block.vdfSolution,
-                          GetConsensus())) {
+                          consensus)) {
         LogError("ReadBlockFromDisk: Errors in block header at %s", pos.ToString());
         return false;
     }

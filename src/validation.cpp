@@ -4313,7 +4313,12 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
  *  in ConnectBlock().
  *  Note that -reindex-chainstate skips the validation that happens here!
  */
-static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& state, const ChainstateManager& chainman, const CBlockIndex* pindexPrev, CBlockIndex* pindexSelf = nullptr)
+static bool ContextualCheckBlock(const CBlock& block,
+                                 BlockValidationState& state,
+                                 const ChainstateManager& chainman,
+                                 const CBlockIndex* pindexPrev,
+                                 CBlockIndex* pindexSelf = nullptr,
+                                 bool fCheckPOW = true)
 {
     const int nHeight = pindexPrev == nullptr ? 0 : pindexPrev->nHeight + 1;
 
@@ -4381,30 +4386,34 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
             return state.Invalid(BlockValidationResult::BLOCK_CONSENSUS, "bad-ext-commitment-mismatch", "coinbase ext commitment does not match header");
         }
         // The header proof-of-work is verified at header-acceptance time and the
-        // result cached on the index; recompute only when no cached value exists.
-        if (pindexSelf && !pindexSelf->randomXPowHash.IsNull()) {
-            arith_uint256 bnTarget;
-            bnTarget.SetCompact(block.nBits);
-            if (UintToArith256(pindexSelf->randomXPowHash) > bnTarget) {
-                return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash-randomx", "RandomX v2 proof of work failed");
-            }
-        } else {
-            uint256 randomx_pow_hash;
-            const auto rx_err = CheckProofOfWorkRandomXDetailed(block, nHeight, pindexPrev, chainman.GetConsensus(), &randomx_pow_hash, nullptr, nullptr, nullptr, nullptr);
-            if (rx_err != RandomXPoWError::OK) {
-                if (rx_err == RandomXPoWError::BAD_TARGET) {
-                    return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-randomx-target", "RandomX target invalid");
+        // result cached on the index. TestBlockValidity deliberately supplies
+        // fCheckPOW=false while assembling an unmined template, so it must check
+        // the commitment structure without trying to mine that template first.
+        if (fCheckPOW) {
+            if (pindexSelf && !pindexSelf->randomXPowHash.IsNull()) {
+                arith_uint256 bnTarget;
+                bnTarget.SetCompact(block.nBits);
+                if (UintToArith256(pindexSelf->randomXPowHash) > bnTarget) {
+                    return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash-randomx", "RandomX v2 proof of work failed");
                 }
-                if (rx_err == RandomXPoWError::MISSING_KEY_BLOCK) {
-                    return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "missing-randomx-key", "RandomX key block missing");
+            } else {
+                uint256 randomx_pow_hash;
+                const auto rx_err = CheckProofOfWorkRandomXDetailed(block, nHeight, pindexPrev, chainman.GetConsensus(), &randomx_pow_hash, nullptr, nullptr, nullptr, nullptr);
+                if (rx_err != RandomXPoWError::OK) {
+                    if (rx_err == RandomXPoWError::BAD_TARGET) {
+                        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-randomx-target", "RandomX target invalid");
+                    }
+                    if (rx_err == RandomXPoWError::MISSING_KEY_BLOCK) {
+                        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "missing-randomx-key", "RandomX key block missing");
+                    }
+                    if (rx_err == RandomXPoWError::COMPUTE_FAILED) {
+                        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "randomx-compute-failed", "RandomX hash computation failed");
+                    }
+                    return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash-randomx", "RandomX v2 proof of work failed");
                 }
-                if (rx_err == RandomXPoWError::COMPUTE_FAILED) {
-                    return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "randomx-compute-failed", "RandomX hash computation failed");
+                if (pindexSelf) {
+                    pindexSelf->randomXPowHash = randomx_pow_hash;
                 }
-                return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "high-hash-randomx", "RandomX v2 proof of work failed");
-            }
-            if (pindexSelf) {
-                pindexSelf->randomXPowHash = randomx_pow_hash;
             }
         }
     } else if (pindexPrev) {
@@ -4421,7 +4430,7 @@ static bool ContextualCheckBlock(const CBlock& block, BlockValidationState& stat
         if (pCurrent && pCurrent->IsPostFork()) {
             return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-fork-format", "pre-fork timestamp on post-fork-format block");
         }
-        if (pCurrent && !pCurrent->IsPostFork()) {
+        if (fCheckPOW && pCurrent && !pCurrent->IsPostFork()) {
             CLegacyBlockHeader legacyHeader;
             legacyHeader.nVersion = block.nVersion;
             legacyHeader.hashPrevBlock = block.hashPrevBlock;
@@ -4914,7 +4923,7 @@ bool TestBlockValidity(BlockValidationState& state,
         LogError("%s: Consensus::CheckBlock: %s\n", __func__, state.ToString());
         return false;
     }
-    if (!ContextualCheckBlock(block, state, chainstate.m_chainman, pindexPrev)) {
+    if (!ContextualCheckBlock(block, state, chainstate.m_chainman, pindexPrev, nullptr, fCheckPOW)) {
         LogError("%s: Consensus::ContextualCheckBlock: %s\n", __func__, state.ToString());
         return false;
     }
