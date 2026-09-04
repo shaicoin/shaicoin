@@ -11,6 +11,7 @@
 #include <kernel/caches.h>
 #include <logging.h>
 #include <node/blockstorage.h>
+#include <pow.h>
 #include <sync.h>
 #include <threadsafety.h>
 #include <tinyformat.h>
@@ -29,6 +30,80 @@
 using kernel::CacheSizes;
 
 namespace node {
+
+// An older v4 node could accept a timestamp at or below its direct parent.
+// That block may already be the tip recorded in the coins database when the
+// node is upgraded, so it will not pass through header acceptance again. Find
+// the first such indexed block and use the normal invalidation path to undo its
+// active descendants, mark the bad branch failed, and select a valid chain.
+static ChainstateLoadResult RepairPostForkTimestampRollback(ChainstateManager& chainman)
+{
+    bool repaired{false};
+
+    while (!chainman.m_interrupt) {
+        CBlockIndex* bad_block{WITH_LOCK(cs_main, {
+            CBlockIndex* earliest_bad{nullptr};
+            for (auto& [_, block_index] : chainman.BlockIndex()) {
+                if (block_index.pprev == nullptr || block_index.nStatus & BLOCK_FAILED_MASK) {
+                    continue;
+                }
+                if (!IsPostForkTimestampMonotonic(
+                        block_index.GetBlockHeader(), *block_index.pprev, chainman.GetConsensus())) {
+                    if (earliest_bad == nullptr || block_index.nHeight < earliest_bad->nHeight) {
+                        earliest_bad = &block_index;
+                    }
+                }
+            }
+            return earliest_bad;
+        })};
+
+        if (bad_block == nullptr) {
+            break;
+        }
+
+        // A wiped chainstate has no active UTXO tip to unwind. Its block
+        // activation will run the equivalent check in ConnectBlock().
+        if (!WITH_LOCK(cs_main, return chainman.ActiveTip() != nullptr)) {
+            break;
+        }
+
+        LogPrintf("Consensus repair: invalidating non-monotonic v4 timestamp block=%s height=%d time=%u parent=%s parent_time=%u\n",
+                  bad_block->GetBlockHash().ToString(), bad_block->nHeight, bad_block->GetBlockTime(),
+                  bad_block->pprev->GetBlockHash().ToString(), bad_block->pprev->GetBlockTime());
+
+        BlockValidationState state;
+        if (!chainman.ActiveChainstate().InvalidateBlock(state, bad_block)) {
+            return {ChainstateLoadStatus::FAILURE,
+                    Untranslated(strprintf("Unable to roll back invalid v4 block %s: %s",
+                                           bad_block->GetBlockHash().ToString(), state.ToString()))};
+        }
+        repaired = true;
+    }
+
+    if (chainman.m_interrupt) {
+        return {ChainstateLoadStatus::INTERRUPTED, {}};
+    }
+    if (!repaired) {
+        return {ChainstateLoadStatus::SUCCESS, {}};
+    }
+
+    // InvalidateBlock() leaves the chain at the last valid ancestor. Immediately
+    // consider the remaining candidates, then persist both the UTXO rollback and
+    // BLOCK_FAILED_* flags so a restart cannot restore the rejected branch.
+    BlockValidationState state;
+    Chainstate& active_chainstate{chainman.ActiveChainstate()};
+    if (!active_chainstate.ActivateBestChain(state)) {
+        return {ChainstateLoadStatus::FAILURE,
+                Untranslated(strprintf("Unable to activate a valid chain after v4 timestamp rollback: %s", state.ToString()))};
+    }
+    if (!active_chainstate.FlushStateToDisk(state, FlushStateMode::ALWAYS)) {
+        return {ChainstateLoadStatus::FAILURE,
+                Untranslated(strprintf("Unable to persist v4 timestamp rollback: %s", state.ToString()))};
+    }
+
+    return {ChainstateLoadStatus::SUCCESS, {}};
+}
+
 // Complete initialization of chainstates after the initial call has been made
 // to ChainstateManager::InitializeChainstate().
 static ChainstateLoadResult CompleteChainstateInitialization(
@@ -159,28 +234,39 @@ ChainstateLoadResult LoadChainstate(ChainstateManager& chainman, const CacheSize
         LogPrintf("Prune configured to target %u MiB on disk for block and undo files.\n", chainman.m_blockman.GetPruneTarget() / 1024 / 1024);
     }
 
-    LOCK(cs_main);
+    {
+        LOCK(cs_main);
 
-    chainman.m_total_coinstip_cache = cache_sizes.coins;
-    chainman.m_total_coinsdb_cache = cache_sizes.coins_db;
+        chainman.m_total_coinstip_cache = cache_sizes.coins;
+        chainman.m_total_coinsdb_cache = cache_sizes.coins_db;
 
-    // Load the fully validated chainstate.
-    chainman.InitializeChainstate(options.mempool);
+        // Load the fully validated chainstate.
+        chainman.InitializeChainstate(options.mempool);
 
-    // Load a chain created from a UTXO snapshot, if any exist.
-    bool has_snapshot = chainman.DetectSnapshotChainstate();
+        // Load a chain created from a UTXO snapshot, if any exist.
+        bool has_snapshot = chainman.DetectSnapshotChainstate();
 
-    if (has_snapshot && options.wipe_chainstate_db) {
-        LogPrintf("[snapshot] deleting snapshot chainstate due to reindexing\n");
-        if (!chainman.DeleteSnapshotChainstate()) {
-            return {ChainstateLoadStatus::FAILURE_FATAL, Untranslated("Couldn't remove snapshot chainstate.")};
+        if (has_snapshot && options.wipe_chainstate_db) {
+            LogPrintf("[snapshot] deleting snapshot chainstate due to reindexing\n");
+            if (!chainman.DeleteSnapshotChainstate()) {
+                return {ChainstateLoadStatus::FAILURE_FATAL, Untranslated("Couldn't remove snapshot chainstate.")};
+            }
+        }
+
+        auto [init_status, init_error] = CompleteChainstateInitialization(chainman, options);
+        if (init_status != ChainstateLoadStatus::SUCCESS) {
+            return {init_status, init_error};
         }
     }
 
-    auto [init_status, init_error] = CompleteChainstateInitialization(chainman, options);
-    if (init_status != ChainstateLoadStatus::SUCCESS) {
-        return {init_status, init_error};
+    // This must run without cs_main: InvalidateBlock() takes its own locks
+    // while disconnecting the persisted invalid branch.
+    auto [repair_status, repair_error] = RepairPostForkTimestampRollback(chainman);
+    if (repair_status != ChainstateLoadStatus::SUCCESS) {
+        return {repair_status, repair_error};
     }
+
+    LOCK(cs_main);
 
     // If a snapshot chainstate was fully validated by a background chainstate during
     // the last run, detect it here and clean up the now-unneeded background

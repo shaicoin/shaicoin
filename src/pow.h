@@ -31,6 +31,14 @@ std::optional<arith_uint256> DeriveTarget(unsigned int nBits, const uint256 pow_
 
 unsigned int GetNextWorkRequired(const CBlockIndex* pindexLast, const CBlockHeader *pblock, const Consensus::Params&);
 
+/**
+ * Post-fork RandomX headers must strictly advance time relative to their
+ * parent. Legacy VDF headers retain their historical timestamp rules.
+ */
+bool IsPostForkTimestampMonotonic(const CBlockHeader& block,
+                                  const CBlockIndex& pindexPrev,
+                                  const Consensus::Params& params);
+
 /** Check whether a block hash satisfies the proof-of-work requirement specified by nBits */
 bool CheckProofOfWork(int nTime,
                       uint256 first_sha_hash,

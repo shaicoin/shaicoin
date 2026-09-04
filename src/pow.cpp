@@ -24,6 +24,17 @@ static arith_uint256 bnProofOfWorkLimit(~arith_uint256(0) >> 9);
 static const arith_uint256 bnRandomXProofOfWorkLimit(bnProofOfWorkLimit / 25);
 static_assert(nTargetSpacing != 0);
 
+bool IsPostForkTimestampMonotonic(const CBlockHeader& block,
+                                  const CBlockIndex& pindexPrev,
+                                  const Consensus::Params& params)
+{
+    // A compact header with a pre-fork timestamp is rejected elsewhere as a
+    // format violation. Including the parent here makes the monotonic rule
+    // apply to every descendant of a RandomX block as well.
+    const bool is_post_fork = block.GetBlockTime() >= params.nRandomXV2Time || pindexPrev.IsPostFork();
+    return !is_post_fork || block.GetBlockTime() > pindexPrev.GetBlockTime();
+}
+
 int64_t static mapNumber(int64_t x, int64_t in_min, int64_t in_max, int64_t out_min, int64_t out_max) {
   return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
 }
