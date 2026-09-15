@@ -9,6 +9,7 @@
 #include <index/disktxpos.h>
 #include <logging.h>
 #include <node/blockstorage.h>
+#include <primitives/legacy_block.h>
 #include <validation.h>
 
 constexpr uint8_t DB_TXINDEX{'t'};
@@ -84,9 +85,35 @@ bool TxIndex::FindTx(const uint256& tx_hash, uint256& block_hash, CTransactionRe
         LogError("%s: OpenBlockFile failed\n", __func__);
         return false;
     }
-    CBlockHeader header;
+    // A block's on-disk header size depends on the block's OWN nTime: a legacy VDF header is
+    // 4096 bytes, while a RandomX header (from nRandomXV2Time onward) is 112. CustomAppend()
+    // above records nTxOffset relative to the END of that header, so the header must be
+    // consumed in its real format before seeking.
+    //
+    // Reading it unconditionally as a CBlockHeader consumes only 112 bytes, which leaves the
+    // file position 3984 bytes short for every legacy block: the seek below then lands inside
+    // vdfSolution, the txid check fails, and FindTx() returns false for EVERY pre-fork
+    // transaction (surfacing as "No such mempool or blockchain transaction" from
+    // getrawtransaction, even with -txindex=1 fully synced). The block hash derived from such
+    // a misread header is garbage too.
+    //
+    // Probe nTime first and read the header in its real format, exactly as
+    // BlockManager::ReadBlock() does. This is a READ-side fix only: the on-disk txindex
+    // records already store the correct offsets, so no -reindex is required.
+    uint256 header_hash;
     try {
-        file >> header;
+        CBlockHeader probe;
+        file >> probe;
+        file.seek(-static_cast<int64_t>(GetSerializeSize(probe)), SEEK_CUR);
+        if (probe.nTime < m_chainstate->m_chainman.GetConsensus().nRandomXV2Time) {
+            CLegacyBlockHeader legacy_header;
+            file >> legacy_header;
+            header_hash = legacy_header.GetHash();
+        } else {
+            CBlockHeader header;
+            file >> header;
+            header_hash = header.GetHash();
+        }
         file.seek(postx.nTxOffset, SEEK_CUR);
         file >> TX_WITH_WITNESS(tx);
     } catch (const std::exception& e) {
@@ -97,6 +124,6 @@ bool TxIndex::FindTx(const uint256& tx_hash, uint256& block_hash, CTransactionRe
         LogError("%s: txid mismatch\n", __func__);
         return false;
     }
-    block_hash = header.GetHash();
+    block_hash = header_hash;
     return true;
 }
