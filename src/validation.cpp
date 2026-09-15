@@ -2470,6 +2470,17 @@ bool Chainstate::ConnectBlock(const CBlock& block, BlockValidationState& state, 
     const auto time_start{SteadyClock::now()};
     const CChainParams& params{m_chainman.GetParams()};
 
+    // Recheck this v4-only header invariant while connecting stored blocks.
+    // ContextualCheckBlockHeader() normally enforces it when a header first
+    // arrives, but an older node may already have accepted an offending block
+    // before upgrading. Keeping this narrow check here lets reindex-chainstate
+    // and normal chain activation mark that block invalid rather than replay it.
+    if (pindex->pprev && !IsPostForkTimestampMonotonic(block, *pindex->pprev, params.GetConsensus())) {
+        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER,
+                             "time-not-increasing-v4",
+                             "post-fork block timestamp must be greater than its parent");
+    }
+
     // Check it again in case a previous version let a bad block in
     // NOTE: We don't currently (re-)invoke ContextualCheckBlock() or
     // ContextualCheckBlockHeader() here. This means that if we add a new
@@ -4258,8 +4269,20 @@ static bool ContextualCheckBlockHeader(const CBlockHeader& block, BlockValidatio
     assert(pindexPrev != nullptr);
     const int nHeight = pindexPrev->nHeight + 1;
 
-    // Check proof of work
     const Consensus::Params& consensusParams = chainman.GetConsensus();
+
+    // RandomX/v4 commits difficulty to the direct parent timestamp. Unlike the
+    // legacy path, permitting a timestamp at or below the parent would make the
+    // DiffRebound bailout arithmetic interpret a time rollback as an outage.
+    // Reject before deriving nBits or doing any RandomX work. Legacy VDF blocks
+    // retain the historical MTP-only rule via IsPostForkTimestampMonotonic().
+    if (!IsPostForkTimestampMonotonic(block, *pindexPrev, consensusParams)) {
+        return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER,
+                             "time-not-increasing-v4",
+                             "post-fork block timestamp must be greater than its parent");
+    }
+
+    // Check proof of work
     if (block.nBits != GetNextWorkRequired(pindexPrev, &block, consensusParams))
         return state.Invalid(BlockValidationResult::BLOCK_INVALID_HEADER, "bad-diffbits", "incorrect proof of work");
 

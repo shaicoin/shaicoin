@@ -50,9 +50,15 @@ int64_t UpdateTime(CBlockHeader* pblock, const Consensus::Params& consensusParam
     int64_t nNewTime{std::max<int64_t>(GetMinimumTime(pindexPrev, consensusParams.DifficultyAdjustmentInterval()),
                                        TicksSinceEpoch<std::chrono::seconds>(NodeClock::now()))};
 
-    if (nOldTime < nNewTime) {
-        pblock->nTime = nNewTime;
+    nNewTime = std::max(nOldTime, nNewTime);
+
+    // RandomX/v4 difficulty commits to the direct parent timestamp, so a v4
+    // template must meet the stricter direct-parent rule as well as MTP. This
+    // matters when a valid parent is a few seconds ahead of the local clock.
+    if (nNewTime >= consensusParams.nRandomXV2Time || pindexPrev->IsPostFork()) {
+        nNewTime = std::max(nNewTime, pindexPrev->GetBlockTime() + 1);
     }
+    pblock->nTime = nNewTime;
 
     // Updating time can change work required on testnet:
     if (consensusParams.fPowAllowMinDifficultyBlocks) {
